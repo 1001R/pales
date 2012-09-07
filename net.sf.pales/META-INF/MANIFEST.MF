@@ -1,0 +1,13 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Pales Process Manager
+Bundle-SymbolicName: net.sf.pales
+Bundle-Version: 0.0.1
+Bundle-Activator: net.sf.pales.Activator
+Require-Bundle: org.eclipse.core.runtime
+Bundle-ActivationPolicy: lazy
+Bundle-RequiredExecutionEnvironment: JavaSE-1.7
+Bundle-NativeCode: jni/iris.dll; processor="x86"; osname="win32"
+Bundle-ClassPath: commons-lang3-3.1.jar,
+ .
+Export-Package: net.sf.pales
