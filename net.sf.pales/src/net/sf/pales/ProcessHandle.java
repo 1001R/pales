@@ -3,10 +3,10 @@ package net.sf.pales;
 
 public class ProcessHandle implements Comparable<ProcessHandle> {
 	private long pid;
-	private final String irisId;
+	private final String palesId;
 	
-	ProcessHandle(String irisId) {
-		this.irisId = irisId;
+	ProcessHandle(String palesId) {
+		this.palesId = palesId;
 		this.pid = -1;
 	}
 
@@ -18,8 +18,8 @@ public class ProcessHandle implements Comparable<ProcessHandle> {
 		this.pid = pid;
 	}
 
-	public String getIrisId() {
-		return irisId;
+	public String getPalesId() {
+		return palesId;
 	}
 	
 	@Override
@@ -32,18 +32,18 @@ public class ProcessHandle implements Comparable<ProcessHandle> {
 		}
 		if (obj instanceof ProcessHandle) {
 			ProcessHandle h = (ProcessHandle) obj;
-			return getIrisId().equals(h.getIrisId());
+			return getPalesId().equals(h.getPalesId());
 		}
 		return false;
 	}
 	
 	@Override
 	public int hashCode() {
-		return getIrisId().hashCode();
+		return getPalesId().hashCode();
 	}
 
 	@Override
 	public int compareTo(ProcessHandle o) {
-		return getIrisId().compareTo(o.getIrisId());
+		return getPalesId().compareTo(o.getPalesId());
 	}
 }

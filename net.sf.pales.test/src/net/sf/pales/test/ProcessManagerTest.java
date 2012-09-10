@@ -36,7 +36,7 @@ public class ProcessManagerTest {
 			@Override
 			public void notificationsAvailable() {
 				PalesNotification n = procMgr.fetchNextNotification();
-				System.out.println(n.getProcessHandle().getIrisId() + " " + n.getProcessStatus());
+				System.out.println(n.getProcessHandle().getPalesId() + " " + n.getProcessStatus());
 			}
 		});
 		
@@ -47,7 +47,7 @@ public class ProcessManagerTest {
 		catch (InterruptedException e) {
 			System.out.println("sleep interrupted");
 		}
-		procMgr.cancelProcess(handle.getIrisId());
+		procMgr.cancelProcess(handle.getPalesId());
 		
 		try {
 			Thread.sleep(60000);

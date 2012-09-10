@@ -167,7 +167,7 @@ public class ProcessManager {
 		List<String> cmd = new ArrayList<>();
 		cmd.add(configuration.getLauncher().toString());
 		cmd.add("-i");
-		cmd.add(encodeIrisId(request.getId()));
+		cmd.add(encodePalesId(request.getId()));
 		cmd.add("-d");
 		cmd.add(configuration.getDataDirectory().toString());
 		
@@ -189,13 +189,13 @@ public class ProcessManager {
 		return new ProcessHandle(request.getId());
 	}
 	
-	private static String encodeIrisId(String irisId) {
+	private static String encodePalesId(String palesId) {
 		StringBuilder sb = new StringBuilder();
-		irisId.getBytes(StandardCharsets.UTF_8);
-		for (int i = 0; i < irisId.length(); i++) {
-			char c = irisId.charAt(i);
+		palesId.getBytes(StandardCharsets.UTF_8);
+		for (int i = 0; i < palesId.length(); i++) {
+			char c = palesId.charAt(i);
 			if ("abcdefghijklmnopqrstuvwxyz0123456789".indexOf(Character.toLowerCase(c)) < 0) {
-				sb.append('_').append(String.format("%04x", irisId.codePointAt(i)));
+				sb.append('_').append(String.format("%04x", palesId.codePointAt(i)));
 			}
 			else {
 				sb.append(c);
@@ -204,8 +204,8 @@ public class ProcessManager {
 		return sb.toString();
 	}
 	
-	public void cancelProcess(String irisId) {
-		OS.cancelProcess(irisId);
+	public void cancelProcess(String palesId) {
+		OS.cancelProcess(palesId);
 	}
 	
 	public void startup() {
@@ -216,7 +216,7 @@ public class ProcessManager {
 		listeners.add(listener);
 	}
 	
-	public void removeIrisListener(PalesListener listener) {
+	public void removeListener(PalesListener listener) {
 		listeners.remove(listener);
 	}
 	
@@ -235,7 +235,7 @@ public class ProcessManager {
 				PalesNotification notification = firstEntry.getValue();
 				if (notification.getProcessStatus() == ProcessStatus.FINISHED || notification.getProcessStatus() == ProcessStatus.CANCELLED) {
 					Path dataDir = configuration.getDataDirectory();
-					Path f = dataDir.resolve(dataDir.getFileSystem().getPath(notification.getProcessHandle().getIrisId() + "-" + notification.getProcessStatus().getAbbreviation()));
+					Path f = dataDir.resolve(dataDir.getFileSystem().getPath(notification.getProcessHandle().getPalesId() + "-" + notification.getProcessStatus().getAbbreviation()));
 					try {
 						Files.delete(f);
 					}
