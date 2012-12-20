@@ -32,6 +32,21 @@ public class ProcessManager {
 	
 	
 	public void init(PalesConfiguration configuration) {
+		/*
+		if (Files.exists(configuration.getDataDirectory())) {
+			if (!Files.isDirectory(configuration.getDataDirectory())) {
+				throw new RuntimeException("Data directory `" + configuration.getDataDirectory() + "' exists and is not a directory");
+			}
+		}
+		else {
+			try {
+				Files.createDirectory(configuration.getDataDirectory());
+			}
+			catch (Exception e) {
+				throw new RuntimeException("Can't create data directory `" + configuration.getDataDirectory() + "'", e);
+			}
+		}
+		*/
 		this.configuration = configuration;
 		startMonitoring();
 		try (DirectoryStream<Path> stream = Files.newDirectoryStream(configuration.getDataDirectory())) {
