@@ -13,58 +13,15 @@ io_mode_t;
 
 int process_cancel(process_t *proc)
 {
-	HANDLE h_snapshot = INVALID_HANDLE_VALUE;
-	PROCESSENTRY32 proc_entry;
-	DWORD pid_array[1024];
-	int num_processes = 0;
-	int num_handles = 0;
-	int i = 0;
-	DWORD pid = proc->pid;
-
-	pid_array[num_processes++] = pid;
-	h_snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, pid);
-  	if (h_snapshot == INVALID_HANDLE_VALUE ) {
-		return -1;
+	if (TerminateJobObject(proc->job, 1)) {
+		CloseHandle(proc->job);
+		CloseHandle(proc->handle);
+		proc->job = NULL;
+		proc->handle = NULL;
+		proc->pid = 0;
+		return 0;
 	}
-	
-	proc_entry.dwSize = sizeof(proc_entry);
-
-	do {
-		pid = pid_array[i++];
-		if (!Process32First(h_snapshot, &proc_entry)) {
-			CloseHandle(h_snapshot);
-			return -1;
-		}
-
-	  	do {
-			if (proc_entry.th32ParentProcessID == pid) {
-				pid_array[num_processes++] = proc_entry.th32ProcessID;
-			}
-		}
-		while (Process32Next(h_snapshot, &proc_entry));
-
-	}
-	while (i < num_processes);
-	CloseHandle(h_snapshot);
-
-
-	HANDLE *handles = malloc(sizeof(HANDLE) * num_processes);
-	for (i = 0; i < num_processes; i++) {
-		HANDLE h = OpenProcess(PROCESS_TERMINATE, 0, pid_array[i]);
-		if (h != INVALID_HANDLE_VALUE) {
-			TerminateProcess(h, 1);
-			handles[num_handles++] = h;
-		}
-	}
-	WaitForMultipleObjects(num_handles, handles, 1, INFINITE);
-	for (i = 0; i < num_handles; i++) {
-		CloseHandle(handles[i]);
-	}
-	free(handles);
-	CloseHandle(proc->handle);
-	proc->handle = INVALID_HANDLE_VALUE;
-	proc->pid = 0;
-	return 0;
+	return -1;
 }
 
 static char *build_cmdline(int argc, char **argv)
@@ -218,9 +175,11 @@ int process_new(const char *id, size_t idlen, process_t **process) {
 
 void process_free(process_t *p) {
 	FREE_IF_NOT_NULL(p->id);
-	if (p->handle != INVALID_HANDLE_VALUE) {
+	if (p->handle != NULL) {
 		CloseHandle(p->handle);
-		p->handle = INVALID_HANDLE_VALUE;
+	}
+	if (p->job != NULL) {
+		CloseHandle(p->job);
 	}
 	free(p);
 }
@@ -231,6 +190,10 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 	int retval = -1;
 	STARTUPINFO sinfo;
 	PROCESS_INFORMATION pinfo;
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit;
+
+	memset(&sinfo, 0, sizeof(sinfo));
+	memset(&pinfo, 0, sizeof(pinfo));
 
 	if (request->id == NULL || request->dbpath == NULL) {
 		goto cleanup;
@@ -241,7 +204,6 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 		goto cleanup;
 	}
 
-	memset(&sinfo, 0, sizeof(sinfo));
 	sinfo.cb = sizeof(sinfo);
 	sinfo.dwFlags = STARTF_USESTDHANDLES;
 
@@ -257,15 +219,26 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 	if (*process == NULL) {
 		goto cleanup;
 	}
+	memset(*process, 0, sizeof(**process));
 	if (((*process)->id = _strdup(request->id)) == NULL) {
 		goto cleanup;
 	}
-	if (!CreateProcess(argv[0], cmdline, NULL, NULL, true, CREATE_NO_WINDOW, NULL, request->workdir, &sinfo, &pinfo)) {
+	if (!CreateProcess(argv[0], cmdline, NULL, NULL, true,
+			CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED | CREATE_BREAKAWAY_FROM_JOB,
+			NULL, request->workdir, &sinfo, &pinfo)) {
 		goto cleanup;
 	}
 	(*process)->pid = pinfo.dwProcessId;
 	(*process)->handle = pinfo.hProcess;
 	(*process)->status = running;
+
+	memset(&limit, 0, sizeof(limit));
+	if (((*process)->job = CreateJobObject(NULL, NULL)) == NULL ||
+			!SetInformationJobObject((*process)->job, JobObjectExtendedLimitInformation, &limit, sizeof(limit)) ||
+			!AssignProcessToJobObject((*process)->job, pinfo.hProcess) ||
+			!ResumeThread(pinfo.hThread)) {
+		goto cleanup;
+	}
 	retval = 0;
 cleanup:
 	FREE_IF_NOT_NULL(cmdline);
@@ -278,8 +251,19 @@ cleanup:
 	if (sinfo.hStdError != INVALID_HANDLE_VALUE) {
 		CloseHandle(sinfo.hStdError);
 	}
+	if (pinfo.hThread != NULL) {
+		CloseHandle(pinfo.hThread);
+	}
+
 	if (retval != 0) {
 		if (*process != NULL) {
+			if ((*process)->handle != NULL) {
+				TerminateProcess((*process)->handle, 1);
+				CloseHandle((*process)->handle);
+			}
+			if ((*process)->job != NULL) {
+				CloseHandle((*process)->job);
+			}
 			FREE_IF_NOT_NULL((*process)->id);
 			free(*process);
 			*process = NULL;

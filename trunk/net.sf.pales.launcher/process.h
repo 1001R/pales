@@ -15,6 +15,7 @@ typedef enum procstat procstat_t;
 typedef struct process {
 	const char *id;
 	HANDLE handle;
+	HANDLE job;
 	DWORD pid;
 	procstat_t status;
 } process_t;
