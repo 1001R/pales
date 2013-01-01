@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #define SEPARATOR '-'
+#define PATHSEP '\\'
 
 int db_open(database_t *db, const char *path)
 {
@@ -33,7 +34,7 @@ int db_close(database_t *db)
 
 static char *process_encode(database_t *db, process_t *proc)
 {
-char pid[32];
+	char pid[32];
 	char *filename, *s;
 	int len;
 
@@ -74,6 +75,7 @@ char pid[32];
 	return filename;
 }
 
+/*
 static process_t *process_decode(database_t *db, const char *path)
 {
 	char *s;
@@ -82,7 +84,7 @@ static process_t *process_decode(database_t *db, const char *path)
 	if (strncmp(db->path, path, strlen(db->path)) == 0) {
 		path += strlen(db->path);
 	}
-	if (*path == '\\') {
+	if (*path == PATHSEP) {
 		path++;
 	}
 	s = strchr(path, SEPARATOR);
@@ -113,120 +115,64 @@ static char *path_join(const char *directory, const char *filename)
 	int len;
 
 	len = strlen(directory);
-	while (len >=0 && directory[len - 1] == '\\') {
+	while (len >=0 && directory[len - 1] == PATHSEP) {
 		len--;
 	}
 	result = s = (char *)malloc(len + 1 + strlen(filename) + 1);
 	if (result != NULL) {
 		strncpy(s, directory, len);
 		s += len;
-		*s++ = '\\';
+		*s++ = PATHSEP;
 		strcpy(s, filename);
 		s += strlen(filename);
 		*s++ = '\0';
 	}
 	return result;
 }
+*/
 
 static int create_empty_file(const char *directory, const char *filename)
 {
-	char tmp_path[MAX_PATH + 1];
-	char path[MAX_PATH + 1];
-	int i;
+	char *path, *s;
+	int len = 0;
+	HANDLE h;
+	bool addpathsep = false;
 
-	if (GetTempFileName(directory, ".PL", 0, tmp_path) == 0) {
+	len = strlen(directory);
+	if (directory[len - 1] != PATHSEP) {
+		addpathsep = true;
+		len++;
+	}
+	len += strlen(filename);
+	if ((path = malloc(len + 1)) == NULL) {
 		return -1;
 	}
-	strcpy(path, directory);
-	i = strlen(directory);
-	if (path[i] != '\\') {
-		path[i++] = '\\';
+	s = path;
+	strcpy(s, directory);
+	s += strlen(directory);
+	if (addpathsep) {
+		*s++ = PATHSEP;
 	}
-	strcpy(path + i, filename);
-	return MoveFile(tmp_path, path) ? 0 : -1;
+	strcpy(s, filename);
+	h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	free(path);
+	if (h == INVALID_HANDLE_VALUE) {
+		return -1;
+	}
+	CloseHandle(h);
+	return 0;
 }
 
 int db_update(database_t *db, process_t *proc)
 {
-	HANDLE h_find = INVALID_HANDLE_VALUE;
-	WIN32_FIND_DATA d_find;
-	int retval = -1, idlen;
-	char *pattern;
-	int len, i;
-	bool separator = false, done;
+	int rv;
+	char *path = process_encode(db, proc);
+	char *sep = strrchr(path, PATHSEP);
 
-	i = strlen(db->path);
-	len = i + 2;
-	if (db->path[len - 1] != '\\') {
-		len++;
-		separator = true;
-	}
-	pattern = malloc(len);
-	if (pattern == NULL) {
-		goto cleanup;
-	}
-	strcpy(pattern, db->path);
-	if (separator) {
-		pattern[i++] = '\\';
-	}
-	pattern[i++] = '*';
-	pattern[i++] = '\0';
-
-	idlen = strlen(proc->id);
-	h_find = FindFirstFile(pattern, &d_find);
-	if (INVALID_HANDLE_VALUE == h_find) {
-		goto cleanup;
-	}
-	done = false;
-   	do {
-		char *frompath, *topath;
-		if (d_find.cFileName[0] == '.') {
-			continue;
-		}
-		process_t *p = process_decode(db, d_find.cFileName);
-		if (p == NULL) {
-			continue;
-		}
-		if (strcmp(p->id, proc->id) == 0) {
-			if (p->status == proc->status) {
-				retval = 0;
-			}
-			else {
-				topath = process_encode(db, proc);
-				frompath = path_join(db->path, d_find.cFileName);
-				MoveFile(frompath, topath);
-				free(frompath);
-				free(topath);
-				retval = 0;
-			}
-			done = true;
-		}
-		process_free(p);
-   	}
-   	while (!done && FindNextFile(h_find, &d_find) != 0);
-	if (!done) {
-		char *path = process_encode(db, proc);
-		char *sep = strrchr(path, '\\');
-		int rv;
-
-		*sep = '\0';
-		rv = create_empty_file(path, sep + 1);
-		free(path);
-		if (rv != 0) {
-			goto cleanup;
-		}
-		else {
-			retval = 0;
-		}
-	}
-cleanup:
-	if (pattern != NULL) {
-		free(pattern);
-	}
-	if (h_find != INVALID_HANDLE_VALUE) {
-		FindClose(h_find);
-	}
-	return retval;
+	*sep = '\0';
+	rv = create_empty_file(path, sep + 1);
+	free(path);
+	return rv;
 }
 
 
