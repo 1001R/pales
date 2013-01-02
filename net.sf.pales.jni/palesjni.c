@@ -1,10 +1,11 @@
 #include "palesjni.h"
-#include <windows.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
+#include <stdlib.h>
 
 #ifdef WIN32
+#include <windows.h>
 
 #define PATHSEP '\\'
 
@@ -15,11 +16,14 @@ static char *stpcpy(char *restrict to, const char *restrict from)
 }
 
 #else
-
+#include <signal.h>
+#include "unix.h"
 #define PATHSEP '/'
 
 #endif
 
+
+#ifdef WIN32
 static char *stpcpy_quote(char *to, const char *from) {
 	bool quote = false;
 	for (const char *s = from; *s; s++) {
@@ -99,6 +103,11 @@ static int pales_exec(const char *execw, const char *procid, const char *dbdir, 
 	free(cmdline);
 	return rv ? 0 : -1;
 }
+#else
+
+#include "unix.h"
+
+#endif
 
 JNIEXPORT jlong JNICALL _Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
@@ -142,8 +151,14 @@ JNIEXPORT jlong JNICALL _Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jc
 	s = stpcpy(execw, c_palesdir);
 	s = stpcpy(s, "\\bin\\execw.exe");
 	s = stpcpy(dbdir, c_palesdir);
-	s = stpcpy(s, "\\db");
+	*s++ = PATHSEP;
+	s = stpcpy(s, "db");
+
+#	ifdef WIN32
 	result = pales_exec(execw, c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
+#	else
+	result = process_run(c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
+#	endif
 cleanup:
 	if (c_argv != NULL) {
 		for (char **arg = c_argv; *arg != NULL; arg++) {
@@ -168,7 +183,7 @@ cleanup:
 	(*env)->ReleaseStringUTFChars(env, palesdir, c_palesdir);
 	(*env)->ReleaseStringUTFChars(env, procid, c_procid);
 
-	if (result != 0) {
+	if (result == -1) {
 		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
 		if (rte == NULL) {
 			(*env)->FatalError(env, "Can't find class java.lang.RuntimeException");
@@ -180,8 +195,9 @@ cleanup:
 
 JNIEXPORT void JNICALL _Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id, jlong pid)
 {
+	bool success = false;
+#	ifdef WIN32
 	HANDLE event;
-	const char *errmsg = NULL;
 
 	const char *ename = (*env)->GetStringUTFChars(env, process_id, NULL);
 	event = CreateEvent(NULL, FALSE, FALSE, ename);
@@ -189,77 +205,17 @@ JNIEXPORT void JNICALL _Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass c
 	if (event == INVALID_HANDLE_VALUE) {
 		errmsg = "Cannot create event object";
 	}
-	else if (!SetEvent(event)) {
-		errmsg = "Cannot signal the event";
+	else {
+		success = SetEvent(event);
 	}
-	if (errmsg != NULL) {
+#	else
+	success = kill(pid, SIGTERM) == 0;
+#	endif
+	if (!success) {
 		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
         if (rte == NULL) {
-			return;
+			(*env)->FatalError(env, "Can't find class java.lang.RuntimeException");
 		}
-		(*env)->ThrowNew(env, rte, "Cannot cancel process");
+		(*env)->ThrowNew(env, rte, "Can't cancel process");
 	}
-}
-
-/*
-JNIEXPORT jstring JNICALL Java_net_sf_pales_OS_execute(JNIEnv *env, jclass clazz, jobjectArray cmdarray)
-{
-	STARTUPINFO sinfo;
-	PROCESS_INFORMATION pinfo;
-	int rv;
-	int len, i, cmdlen;
-	char *cmdline;
-	char *s;
-	jstring retval = NULL;
-
-	cmdlen = 0;
-	len = (*env)->GetArrayLength(env, cmdarray);
-	for (i = 0; i < len; i++) {
-		jstring s = (*env)->GetObjectArrayElement(env, cmdarray, i);
-		cmdlen += (*env)->GetStringUTFLength(env, s) + 2;
-	}
-	cmdlen += len;
-	cmdline = (char*) malloc(cmdlen);
-	s = cmdline;
-	for (i = 0; i < len; i++) {
-		jstring element = (*env)->GetObjectArrayElement(env, cmdarray, i);
-		const char *tmp = (*env)->GetStringUTFChars(env, element, NULL);
-		if (i > 0) {
-			*s++ = ' ';
-		}
-		*s++ = '"';
-		strcpy(s, tmp);
-		s += strlen(tmp);
-		*s++ = '"';
-		(*env)->ReleaseStringUTFChars(env, element, tmp);
-	}
-	*s = '\0';
-	
-	ZeroMemory(&sinfo, sizeof(sinfo));
-    sinfo.cb = sizeof(sinfo);
-    ZeroMemory(&pinfo, sizeof(pinfo));
-
-    // Start the child process. 
-    rv = CreateProcess( NULL,   // No module name (use command line)
-        cmdline,          // Command line
-        NULL,             // Process handle not inheritable
-        NULL,             // Thread handle not inheritable
-        FALSE,            // Set handle inheritance to FALSE
-        CREATE_NO_WINDOW, // No creation flags
-        NULL,             // Use parent's environment block
-        NULL,             // Use parent's starting directory 
-        &sinfo,           // Pointer to STARTUPINFO structure
-        &pinfo );         // Pointer to PROCESS_INFORMATION structure
-	if (rv != 0) {
-		retval = (*env)->NewStringUTF(env, cmdline);
-		CloseHandle(pinfo.hProcess);
- 		CloseHandle(pinfo.hThread);
-	}
-	free(cmdline);
- 	return retval;
-}
-*/
-
-JNIEXPORT jint JNICALL _Java_net_sf_pales_ProcessManager_test(JNIEnv *env, jclass class) {
-	return 42;
 }
