@@ -7,9 +7,7 @@ extern "C" {
 #endif
 
 JNIEXPORT void JNICALL _Java_net_sf_pales_OS_cancelProcess(JNIEnv *, jclass, jstring, jlong);
-
 JNIEXPORT jlong JNICALL _Java_net_sf_pales_ProcessManager_launch(JNIEnv *, jclass, jstring, jstring, jstring, jstring, jstring, jstring, jobjectArray);
-JNIEXPORT jint JNICALL _Java_net_sf_pales_ProcessManager_test(JNIEnv *, jclass);
 
 #ifdef __cplusplus
 }
