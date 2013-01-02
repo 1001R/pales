@@ -1,8 +1,10 @@
 #include "process.h"
 #include <stdbool.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
-#include <TlHelp32.h>
+#include <windows.h>
+#include <wincrypt.h>
 
 #define FREE_IF_NOT_NULL(x) if ((x) != NULL) { free((void*) (x)); }
 
@@ -10,6 +12,8 @@ typedef enum io_mode {
 	in, out
 }
 io_mode_t;
+
+extern char *strdup(const char *);
 
 int process_cancel(process_t *proc)
 {
@@ -69,6 +73,7 @@ static char *build_cmdline(int argc, char **argv)
 	return cmdline;
 }
 
+/*
 static int create_id(uint64_t *id)
 {
 	HCRYPTPROV provider;
@@ -83,6 +88,7 @@ static int create_id(uint64_t *id)
 	}
  	return success ? 0 : -1;
 }
+*/
 
 static HANDLE create_std_handle(DWORD std_handle, const char *path, io_mode_t mode)
 {
@@ -120,23 +126,23 @@ int launch_request_new(const char *id,
 		return -1;
 	}
 	memset(*request, 0, sizeof(**request));
-	if (((*request)->id = _strdup(id)) == NULL) {
+	if (((*request)->id = strdup(id)) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (((*request)->dbpath = _strdup(dbpath)) == NULL) {
+	if (((*request)->dbpath = strdup(dbpath)) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (workdir != NULL && ((*request)->workdir = _strdup(workdir)) == NULL) {
+	if (workdir != NULL && ((*request)->workdir = strdup(workdir)) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (((*request)->outpath = _strdup(outpath != NULL ? outpath : "NUL")) == NULL) {
+	if (((*request)->outpath = strdup(outpath != NULL ? outpath : "NUL")) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (((*request)->errpath = _strdup(errpath != NULL ? errpath : "NUL")) == NULL) {
+	if (((*request)->errpath = strdup(errpath != NULL ? errpath : "NUL")) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
@@ -220,7 +226,7 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 		goto cleanup;
 	}
 	memset(*process, 0, sizeof(**process));
-	if (((*process)->id = _strdup(request->id)) == NULL) {
+	if (((*process)->id = strdup(request->id)) == NULL) {
 		goto cleanup;
 	}
 	if (!CreateProcess(argv[0], cmdline, NULL, NULL, true,
