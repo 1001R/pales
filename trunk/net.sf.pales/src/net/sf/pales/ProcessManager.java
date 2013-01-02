@@ -13,10 +13,10 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -29,7 +29,7 @@ public class ProcessManager {
 	private Thread monitorThread;
 	private volatile boolean monitoring = false;
 	private ListenerList listeners = new ListenerList();
-	
+	private ConcurrentHashMap<String, Long> processIdToPid = new ConcurrentHashMap<>();
 	
 	public void init(PalesConfiguration configuration) {
 		/*
@@ -49,9 +49,11 @@ public class ProcessManager {
 		*/
 		this.configuration = configuration;
 		startMonitoring();
-		try (DirectoryStream<Path> stream = Files.newDirectoryStream(configuration.getDataDirectory())) {
+		List<Path> dbFiles = new ArrayList<>();
+		try (DirectoryStream<Path> stream = Files.newDirectoryStream(configuration.getDatabaseDirectory())) {
 			for (Path file : stream) {
 				Path f = file.getFileName();
+				dbFiles.add(f);
 				handleFile(configuration.getDataDirectory(), f);
 			}
 		}
@@ -63,7 +65,7 @@ public class ProcessManager {
 	
 	private void monitorProcessDatabase() {
 		try (WatchService watcher = FileSystems.getDefault().newWatchService()) {
-			configuration.getDataDirectory().register(watcher, StandardWatchEventKinds.ENTRY_CREATE);
+			configuration.getDatabaseDirectory().register(watcher, StandardWatchEventKinds.ENTRY_CREATE);
 			while (monitoring) {
 				WatchKey key = null;
 				try {
@@ -118,17 +120,40 @@ public class ProcessManager {
 		}
 	}
 	
+	private String getProcessId(Path path) {
+		String fn = path.getFileName().toString();
+		int i = fn.indexOf('-');
+		if (i < 0) {
+			return null;
+		}
+		return fn.substring(0, i);
+	}
+	
+	private ProcessStatus getProcessStatus(Path path) {
+		String fn = path.getFileName().toString();
+		int i = fn.indexOf('-');
+		if (i < 0) {
+			return null;
+		}
+		return ProcessStatus.fromAbbreviation(fn.charAt(i + 1));
+	}
+	
+	private long getProcessPid(Path path) {
+		String fn = path.getFileName().toString();
+		int i = fn.indexOf('-');
+		if (i < 0) {
+			return 0;
+		}
+		ProcessStatus status = ProcessStatus.fromAbbreviation(fn.charAt(i + 1));
+		if (status != ProcessStatus.RUNNING) {
+			return 0;
+		}
+		return Long.parseLong(fn.substring(i + 3));
+	}
+	
 	private void handleFile(Path directory, Path file) {
-		String fileName = file.toString();
-		if (fileName.charAt(0) == '.') {
-			return;
-		}
-		int pos = fileName.indexOf('-');
-		if (pos < 0 || fileName.length() == pos + 1) {
-			return;
-		}
-		String id = fileName.substring(0, pos);
-        ProcessStatus status = ProcessStatus.fromAbbreviation(fileName.charAt(pos + 1));
+		String id = getProcessId(file);
+        ProcessStatus status = getProcessStatus(file);
         ProcessHandle handle = new ProcessHandle(id);
       
         Path fullPath = directory.resolve(file);
@@ -143,6 +168,7 @@ public class ProcessManager {
         
     	switch (status) {
     	case RUNNING:
+    		processIdToPid.put(id, getProcessPid(file));
     		markRunning(handle, timestamp);
     		break;
     	case FINISHED:
@@ -179,30 +205,18 @@ public class ProcessManager {
 	}
 	
 	public ProcessHandle launch(PalesLaunchRequest request) {
-		List<String> cmd = new ArrayList<>();
-		cmd.add(configuration.getLauncher().toString());
-		cmd.add("-i");
-		cmd.add(encodePalesId(request.getId()));
-		cmd.add("-d");
-		cmd.add(configuration.getDataDirectory().toString());
-		
-		if (request.getWorkingDirectory() != null) {
-			cmd.add("-w");
-			cmd.add(request.getWorkingDirectory().toString());
-		}
-		if (request.getStderrFile() != null) {
-			cmd.add("-e");
-			cmd.add(request.getStderrFile().toString());
-		}
-		if (request.getStdoutFile() != null) {
-			cmd.add("-o");
-			cmd.add(request.getStdoutFile().toString());
-		}
-		cmd.add(request.getExecutable().toString());
-		cmd.addAll(Arrays.asList(request.getArgs()));
-		OS.execute(cmd.toArray(new String[0]));
+		launch(encodePalesId(request.getId()),
+				configuration.getDataDirectory().toString(),
+				request.getWorkingDirectory().toString(),
+				request.getStdoutFile() != null ? request.getStdoutFile().toString() : null,
+				request.getStderrFile() != null ? request.getStderrFile().toString() : null,
+				request.getExecutable().toString(),
+				request.getArgs());
 		return new ProcessHandle(request.getId());
 	}
+	
+	private native static long launch(String processId, String palesDirectory, String workDirectory, String outFile, String errFile, String executable, String[] argv);
+	private static native int test();
 	
 	private static String encodePalesId(String palesId) {
 		StringBuilder sb = new StringBuilder();
@@ -220,7 +234,8 @@ public class ProcessManager {
 	}
 	
 	public void cancelProcess(String palesId) {
-		OS.cancelProcess(palesId);
+		long pid = processIdToPid.get(palesId);
+		OS.cancelProcess(palesId, pid);
 	}
 	
 	public void startup() {
@@ -249,18 +264,33 @@ public class ProcessManager {
 			if (firstEntry != null) {
 				PalesNotification notification = firstEntry.getValue();
 				if (notification.getProcessStatus() == ProcessStatus.FINISHED || notification.getProcessStatus() == ProcessStatus.CANCELLED) {
-					Path dataDir = configuration.getDataDirectory();
-					Path f = dataDir.resolve(dataDir.getFileSystem().getPath(notification.getProcessHandle().getPalesId() + "-" + notification.getProcessStatus().getAbbreviation()));
-					try {
-						Files.delete(f);
-					}
-					catch (IOException e) {
-						throw new RuntimeException(e);
-					}
+					deleteProcess(notification.getProcessHandle().getPalesId());
 				}
 			}
 		}
 		return firstEntry != null ? firstEntry.getValue() : null;
+	}
+	
+	private void deleteProcess(String processId) {
+		List<Path> filesToDelete = new ArrayList<>();
+		try (DirectoryStream<Path> ds = Files.newDirectoryStream(configuration.getDatabaseDirectory())) {
+			for (Path p : ds) {
+				if (p.getFileName().toString().startsWith(processId)) {
+					filesToDelete.add(p);
+				}
+			}
+		}
+		catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		for (Path p : filesToDelete) {
+			try {
+				Files.delete(p);
+			}
+			catch (IOException e) {
+				p.toFile().deleteOnExit();
+			}
+		}
 	}
 	
 	public void shutdown() {

@@ -14,6 +14,10 @@ public class PalesConfiguration {
 	public void setDataDirectory(Path dataDirectory) {
 		this.dataDirectory = dataDirectory;
 	}
+	
+	public Path getDatabaseDirectory() {
+		return getDataDirectory().resolve("db");
+	}
 
 	public Path getLauncher() {
 		return launcher;
