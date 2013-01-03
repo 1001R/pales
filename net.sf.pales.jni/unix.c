@@ -4,7 +4,9 @@
  *  Created on: Jan 2, 2013
  *      Author: phil
  */
+#ifndef WIN32
 #include <stdlib.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
@@ -12,6 +14,7 @@
 #include <syslog.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 typedef enum procstat {
 	running,
@@ -38,10 +41,10 @@ static char *process_encode(const char *dbdir, const char *procid, procstat_t st
 	}
 
 	if (status == running) {
-		vasprintf(&result, "%s/%s-R-%d", dbdir, procid, pid);
+		asprintf(&result, "%s/%s-R-%d", dbdir, procid, pid);
 	}
 	else {
-		vasprintf(&result, "%s/%s-%c", dbdir, procid, c);
+		asprintf(&result, "%s/%s-%c", dbdir, procid, c);
 	}
 	return result;
 }
@@ -197,7 +200,6 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
 pid_t process_run(const char *procid, const char *dbdir, const char *workdir, const char *outfile, const char *errfile, const char *executable, char **argv)
 {
 	pid_t pid;
-	int status;
 
 	if (executable == NULL) {
 		return -1;
@@ -212,3 +214,5 @@ pid_t process_run(const char *procid, const char *dbdir, const char *workdir, co
 	}
 	return pid;
 }
+
+#endif

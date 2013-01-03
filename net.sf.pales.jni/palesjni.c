@@ -109,14 +109,17 @@ static int pales_exec(const char *execw, const char *procid, const char *dbdir, 
 
 #endif
 
-JNIEXPORT jlong JNICALL _Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring procid, jstring palesdir,
+JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *env, jclass class, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
 {
 	const char *c_procid, *c_palesdir, *c_workdir, *c_outfile = NULL, *c_errfile = NULL, *c_executable;
-	char *dbdir = NULL, *execw = NULL, *s;
+	char *dbdir = NULL, *s;
+#	ifdef WIN32
+	char *execw = NULL;
+#	endif
 	char **c_argv = NULL;
 	jlong result = -1;
-	int n;
+	int n, i, j;
 
 	c_procid = (*env)->GetStringUTFChars(env, procid, NULL);
 	c_palesdir = (*env)->GetStringUTFChars(env, palesdir, NULL);
@@ -128,28 +131,42 @@ JNIEXPORT jlong JNICALL _Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jc
 	if (errfile != NULL) {
 		c_errfile = (*env)->GetStringUTFChars(env, errfile, NULL);
 	}
+#	ifdef WIN32
 	if ((execw = malloc(strlen(c_palesdir) + 15)) == NULL) {
 		goto cleanup;
 	}
+#	endif
 	if ((dbdir = malloc(strlen(c_palesdir) + 4)) == NULL) {
 		goto cleanup;
 	}
-	n = (*env)->GetArrayLength(env, argv);
-	if ((c_argv = calloc(n + 1, sizeof(void*))) == NULL) {
+	i = j = 0;
+	n = (*env)->GetArrayLength(env, argv) + 1;
+#	ifndef WIN32
+	n++;
+#	endif
+	if ((c_argv = calloc(n, sizeof(void*))) == NULL) {
 		goto cleanup;
 	}
-	for (int i = 0; i < n; i++) {
-		jstring str = (*env)->GetObjectArrayElement(env, argv, i);
+#	ifndef WIN32
+	c_argv[0] = strdup(c_executable);
+	i++;
+#	endif
+	for ( ; i < n - 1; i++) {
+		jstring str = (*env)->GetObjectArrayElement(env, argv, j++);
 		if (str == NULL) {
 			goto cleanup;
 		}
 		const char *s = (*env)->GetStringUTFChars(env, str, NULL);
-		if ((c_argv[i] = strdup(s)) == NULL) {
+		c_argv[i] = strdup(s);
+		(*env)->ReleaseStringUTFChars(env, str, s);
+		if (c_argv[i] == NULL) {
 			goto cleanup;
 		}
 	}
+#	ifdef WIN32
 	s = stpcpy(execw, c_palesdir);
 	s = stpcpy(s, "\\bin\\execw.exe");
+#	endif
 	s = stpcpy(dbdir, c_palesdir);
 	*s++ = PATHSEP;
 	s = stpcpy(s, "db");
@@ -166,9 +183,11 @@ cleanup:
 		}
 		free(c_argv);
 	}
+#	ifdef WIN32
 	if (execw != NULL) {
 		free(execw);
 	}
+#	endif
 	if (dbdir != NULL) {
 		free(dbdir);
 	}
@@ -193,7 +212,7 @@ cleanup:
 	return result;
 }
 
-JNIEXPORT void JNICALL _Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id, jlong pid)
+JNIEXPORT void JNICALL PREFIX(Java_net_sf_pales_OS_cancelProcess)(JNIEnv *env, jclass class, jstring process_id, jlong pid)
 {
 	bool success = false;
 #	ifdef WIN32

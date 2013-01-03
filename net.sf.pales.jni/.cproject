@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<?fileVersion 4.0.0?>
-
-<cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+<?fileVersion 4.0.0?><cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
 	<storageModule moduleId="org.eclipse.cdt.core.settings">
 		<cconfiguration id="cdt.managedbuild.config.gnu.mingw.so.debug.1491462939">
 			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.mingw.so.debug.1491462939" moduleId="org.eclipse.cdt.core.settings" name="Debug">
@@ -37,7 +35,6 @@
 								<option defaultValue="gnu.c.optimization.level.none" id="gnu.c.compiler.mingw.so.debug.option.optimization.level.804229616" name="Optimization Level" superClass="gnu.c.compiler.mingw.so.debug.option.optimization.level" valueType="enumerated"/>
 								<option id="gnu.c.compiler.mingw.so.debug.option.debugging.level.1396274610" name="Debug Level" superClass="gnu.c.compiler.mingw.so.debug.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.1128652827" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="/System/Library/Frameworks/JavaVM.framework/Versions/A/Headers"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\Java\jdk1.7.0_07\include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\Java\jdk1.7.0_07\include\win32&quot;"/>
 								</option>
@@ -46,10 +43,12 @@
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.mingw.so.debug.972363650" name="MinGW C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.mingw.so.debug">
 								<option defaultValue="true" id="gnu.c.link.mingw.so.debug.option.shared.1165190237" name="Shared (-shared)" superClass="gnu.c.link.mingw.so.debug.option.shared" valueType="boolean"/>
+								<option id="gnu.c.link.option.other.978541570" name="Other options (-Xlinker [option])" superClass="gnu.c.link.option.other" valueType="stringList"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.linker.input.1966375678" superClass="cdt.managedbuild.tool.gnu.c.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
 								</inputType>
+								<outputType id="cdt.managedbuild.tool.gnu.c.linker.mingw.so.debug.output.424674757" outputPrefix="" superClass="cdt.managedbuild.tool.gnu.c.linker.mingw.so.debug.output"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.mingw.so.debug.1891679451" name="MinGW C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.mingw.so.debug">
 								<option defaultValue="true" id="gnu.cpp.link.mingw.so.debug.option.shared.1338117295" name="Shared (-shared)" superClass="gnu.cpp.link.mingw.so.debug.option.shared" valueType="boolean"/>
@@ -94,7 +93,6 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.mingw.so.release.option.optimization.level.1880956692" name="Optimization Level" superClass="gnu.c.compiler.mingw.so.release.option.optimization.level" valueType="enumerated"/>
 								<option id="gnu.c.compiler.mingw.so.release.option.debugging.level.1026124472" name="Debug Level" superClass="gnu.c.compiler.mingw.so.release.option.debugging.level" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.1918611335" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="/System/Library/Frameworks/JavaVM.framework/Versions/A/Headers"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\Java\jdk1.7.0_07\include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\Java\jdk1.7.0_07\include\win32&quot;"/>
 								</option>
@@ -103,6 +101,7 @@
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.mingw.so.release.773809261" name="MinGW C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.mingw.so.release">
 								<option defaultValue="true" id="gnu.c.link.mingw.so.release.option.shared.507710519" name="Shared (-shared)" superClass="gnu.c.link.mingw.so.release.option.shared" valueType="boolean"/>
+								<option id="gnu.c.link.option.other.930953839" name="Other options (-Xlinker [option])" superClass="gnu.c.link.option.other" valueType="stringList"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.linker.input.385734926" superClass="cdt.managedbuild.tool.gnu.c.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
