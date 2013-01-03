@@ -32,21 +32,6 @@ public class ProcessManager {
 	private ConcurrentHashMap<String, Long> processIdToPid = new ConcurrentHashMap<>();
 	
 	public void init(PalesConfiguration configuration) {
-		/*
-		if (Files.exists(configuration.getDataDirectory())) {
-			if (!Files.isDirectory(configuration.getDataDirectory())) {
-				throw new RuntimeException("Data directory `" + configuration.getDataDirectory() + "' exists and is not a directory");
-			}
-		}
-		else {
-			try {
-				Files.createDirectory(configuration.getDataDirectory());
-			}
-			catch (Exception e) {
-				throw new RuntimeException("Can't create data directory `" + configuration.getDataDirectory() + "'", e);
-			}
-		}
-		*/
 		this.configuration = configuration;
 		startMonitoring();
 		List<Path> dbFiles = new ArrayList<>();
@@ -168,7 +153,9 @@ public class ProcessManager {
         
     	switch (status) {
     	case RUNNING:
-    		processIdToPid.put(id, getProcessPid(file));
+    		long pid = getProcessPid(file);
+    		processIdToPid.put(id, pid);
+    		handle.setPid(pid);
     		markRunning(handle, timestamp);
     		break;
     	case FINISHED:
@@ -205,18 +192,17 @@ public class ProcessManager {
 	}
 	
 	public ProcessHandle launch(PalesLaunchRequest request) {
-		launch(encodePalesId(request.getId()),
+		long pid = launch(encodePalesId(request.getId()),
 				configuration.getDataDirectory().toString(),
 				request.getWorkingDirectory().toString(),
 				request.getStdoutFile() != null ? request.getStdoutFile().toString() : null,
 				request.getStderrFile() != null ? request.getStderrFile().toString() : null,
 				request.getExecutable().toString(),
 				request.getArgs());
-		return new ProcessHandle(request.getId());
+		return new ProcessHandle(request.getId(), pid);
 	}
 	
 	private native static long launch(String processId, String palesDirectory, String workDirectory, String outFile, String errFile, String executable, String[] argv);
-	private static native int test();
 	
 	private static String encodePalesId(String palesId) {
 		StringBuilder sb = new StringBuilder();
