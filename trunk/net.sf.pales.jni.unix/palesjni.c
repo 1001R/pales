@@ -221,12 +221,7 @@ JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass cl
 	const char *ename = (*env)->GetStringUTFChars(env, process_id, NULL);
 	event = CreateEvent(NULL, FALSE, FALSE, ename);
 	(*env)->ReleaseStringUTFChars(env, process_id, ename);
-	if (event == INVALID_HANDLE_VALUE) {
-		errmsg = "Cannot create event object";
-	}
-	else {
-		success = SetEvent(event);
-	}
+	success = event != NULL && SetEvent(event);
 #	else
 	success = kill(pid, SIGTERM) == 0;
 #	endif
