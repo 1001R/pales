@@ -167,10 +167,11 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
                     sigdelset(&sigset, SIGTERM);
                     killpg(pid, SIGKILL);
                     pstat = cancelled;
+                    done = true;
                     break;
             	case SIGCHLD:
-                    done = true;
                     pstat = finished;
+                    done = true;
                     break;
             	case SIGALRM:
             		break;
