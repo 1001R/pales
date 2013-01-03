@@ -119,7 +119,7 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 #	endif
 	char **c_argv = NULL;
 	jlong result = -1;
-	int n, i;
+	int n, i, j;
 
 	c_procid = (*env)->GetStringUTFChars(env, procid, NULL);
 	c_palesdir = (*env)->GetStringUTFChars(env, palesdir, NULL);
@@ -139,7 +139,7 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 	if ((dbdir = malloc(strlen(c_palesdir) + 4)) == NULL) {
 		goto cleanup;
 	}
-	i = 0;
+	i = j = 0;
 	n = (*env)->GetArrayLength(env, argv) + 1;
 #	ifndef WIN32
 	n++;
@@ -148,22 +148,18 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 		goto cleanup;
 	}
 #	ifndef WIN32
-	s = strrchr(c_executable, PATHSEP);
-	if (s == NULL) {
-		c_argv[0] = strdup(c_executable);
-	}
-	else {
-		c_argv[0] = strdup(s + 1);
-	}
+	c_argv[0] = strdup(c_executable);
 	i++;
 #	endif
-	for ( ; i < n; i++) {
-		jstring str = (*env)->GetObjectArrayElement(env, argv, i);
+	for ( ; i < n - 1; i++) {
+		jstring str = (*env)->GetObjectArrayElement(env, argv, j++);
 		if (str == NULL) {
 			goto cleanup;
 		}
 		const char *s = (*env)->GetStringUTFChars(env, str, NULL);
-		if ((c_argv[i] = strdup(s)) == NULL) {
+		c_argv[i] = strdup(s);
+		(*env)->ReleaseStringUTFChars(env, str, s);
+		if (c_argv[i] == NULL) {
 			goto cleanup;
 		}
 	}
