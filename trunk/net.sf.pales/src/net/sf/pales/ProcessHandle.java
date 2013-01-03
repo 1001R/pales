@@ -10,7 +10,12 @@ public class ProcessHandle implements Comparable<ProcessHandle> {
 		this.pid = -1;
 	}
 
-	long getPid() {
+	ProcessHandle(String palesId, long pid) {
+		this.palesId = palesId;
+		this.pid = pid;
+	}
+
+	public long getPid() {
 		return pid;
 	}
 
