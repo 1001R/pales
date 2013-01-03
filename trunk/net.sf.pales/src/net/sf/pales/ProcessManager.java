@@ -51,6 +51,10 @@ public class ProcessManager {
 	private void monitorProcessDatabase() {
 		try (WatchService watcher = FileSystems.getDefault().newWatchService()) {
 			configuration.getDatabaseDirectory().register(watcher, StandardWatchEventKinds.ENTRY_CREATE);
+			monitoring = true;
+			synchronized (this) {
+				notifyAll();
+			}
 			while (monitoring) {
 				WatchKey key = null;
 				try {
@@ -79,19 +83,29 @@ public class ProcessManager {
 			}
 		}
 		catch (IOException e) {
-			throw new RuntimeException(e);
+			e.printStackTrace();
 		}
 	}
 	
 	private void startMonitoring() {
-		monitoring = true;
 		monitorThread = new Thread(new Runnable() {
 			@Override
 			public void run() {
 				monitorProcessDatabase();
 			}
 		});
+		monitoring = false;
 		monitorThread.start();
+		synchronized (this) {
+			while (!monitoring) {
+				try {
+					wait();
+				}
+				catch (InterruptedException e) {
+					
+				}
+			}
+		}
 	}
 	
 	private void stopMonitoring() {

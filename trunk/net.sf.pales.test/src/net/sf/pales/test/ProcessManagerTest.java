@@ -22,19 +22,23 @@ public class ProcessManagerTest {
 	@Test
 	public void test() throws InterruptedException {
 		PalesConfiguration configuration = new PalesConfiguration();
-		configuration.setDataDirectory(FileSystems.getDefault().getPath("/home/phil/pales"));
-//		configuration.setLauncher(FileSystems.getDefault().getPath("C:/temp/pales/bin/launch.exe"));
+//		configuration.setDataDirectory(FileSystems.getDefault().getPath("/home/phil/pales"));
+		configuration.setDataDirectory(FileSystems.getDefault().getPath("C:/temp/pales/deadbeef"));
 		configuration.setId("DEADBEEF");
 		final ProcessManager procMgr = new ProcessManager();
 		procMgr.init(configuration);
 		
 		PalesLaunchRequest request = new PalesLaunchRequest();
 		request.setId(UUID.randomUUID().toString().replace("-", ""));
-		request.setExecutable(FileSystems.getDefault().getPath("/home/phil/pales/tree.sh"));
-		request.setStdoutFile(FileSystems.getDefault().getPath("/home/phil/pales/out.txt"));
-		request.setStderrFile(FileSystems.getDefault().getPath("/home/phil/pales/err.txt"));
-		request.setArgs(new String[] { "3", "3", "A" });
-		request.setWorkingDirectory(FileSystems.getDefault().getPath("/tmp"));
+//		request.setExecutable(FileSystems.getDefault().getPath("/home/phil/pales/tree.sh"));
+//		request.setStdoutFile(FileSystems.getDefault().getPath("/home/phil/pales/out.txt"));
+//		request.setStderrFile(FileSystems.getDefault().getPath("/home/phil/pales/err.txt"));
+		request.setExecutable(FileSystems.getDefault().getPath("C:/temp/pales/tree.bat"));
+		request.setStdoutFile(FileSystems.getDefault().getPath("C:/temp/pales/out.txt"));
+		request.setStderrFile(FileSystems.getDefault().getPath("C:/temp/pales/err.txt"));
+		request.setArgs(new String[] { "3", "3", "0" });
+//		request.setWorkingDirectory(FileSystems.getDefault().getPath("/tmp"));
+		request.setWorkingDirectory(FileSystems.getDefault().getPath("C:/temp"));
 
 		final Semaphore sem = new Semaphore(0); 
 		

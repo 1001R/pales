@@ -4,7 +4,6 @@ import java.nio.file.Path;
 
 public class PalesConfiguration {
 	private Path dataDirectory;
-	private Path launcher;
 	private String id;
 
 	public Path getDataDirectory() {
@@ -17,14 +16,6 @@ public class PalesConfiguration {
 	
 	public Path getDatabaseDirectory() {
 		return getDataDirectory().resolve("db");
-	}
-
-	public Path getLauncher() {
-		return launcher;
-	}
-
-	public void setLauncher(Path launcher) {
-		this.launcher = launcher;
 	}
 
 	public String getId() {
