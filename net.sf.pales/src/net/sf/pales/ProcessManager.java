@@ -167,9 +167,6 @@ public class ProcessManager {
         
     	switch (status) {
     	case RUNNING:
-    		long pid = getProcessPid(file);
-    		processIdToPid.put(id, pid);
-    		handle.setPid(pid);
     		markRunning(handle, timestamp);
     		break;
     	case FINISHED:
@@ -213,6 +210,7 @@ public class ProcessManager {
 				request.getStderrFile() != null ? request.getStderrFile().toString() : null,
 				request.getExecutable().toString(),
 				request.getArgs());
+		processIdToPid.put(request.getId(), pid);
 		return new ProcessHandle(request.getId(), pid);
 	}
 	
