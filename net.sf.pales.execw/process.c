@@ -104,7 +104,7 @@ static HANDLE create_std_handle(DWORD std_handle, const char *path, io_mode_t mo
 	}
 	h = CreateFile(path, 
 		mode == out ? GENERIC_WRITE : GENERIC_READ,
-		mode == out ? FILE_SHARE_WRITE : FILE_SHARE_READ,
+		mode == out ? FILE_SHARE_READ : FILE_SHARE_WRITE,
 		NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
 		return INVALID_HANDLE_VALUE;
