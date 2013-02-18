@@ -294,4 +294,15 @@ public class ProcessManager {
 	public void shutdown() {
 		stopMonitoring();
 	}
+	
+	public boolean hasBeenLaunched(String processId) {
+		synchronized (notifications) {
+			for (PalesNotification notification : notifications.values()) {
+				if (notification.getProcessHandle().getPalesId().equals(processId)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 }
