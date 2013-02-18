@@ -39,7 +39,7 @@ public class ProcessManager {
 			for (Path file : stream) {
 				Path f = file.getFileName();
 				dbFiles.add(f);
-				handleFile(configuration.getDataDirectory(), f);
+				handleFile(configuration.getDatabaseDirectory(), f);
 			}
 		}
 		catch (IOException e) {
