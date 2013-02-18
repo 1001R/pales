@@ -180,7 +180,7 @@ public class ProcessManager {
 	}
 	
 	private void markRunning(ProcessHandle handle, long timestamp) {
-		if (!processIdToPid.contains(handle.getPalesId())) {
+		if (!processIdToPid.containsKey(handle.getPalesId())) {
 			processIdToPid.put(handle.getPalesId(), handle.getPid());
 		}
 		updateNotification(handle, ProcessStatus.RUNNING, timestamp);
