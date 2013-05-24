@@ -19,6 +19,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.eclipse.core.runtime.ListenerList;
 
@@ -206,7 +207,9 @@ public class ProcessManager {
 	}
 	
 	public ProcessHandle launch(PalesLaunchRequest request) {
-		long pid = launch(encodePalesId(request.getId()),
+		String execHelper = SystemUtils.IS_OS_WINDOWS ? Activator.getExecHelperPath().toString() : null;
+		long pid = launch(execHelper,
+				encodePalesId(request.getId()),
 				configuration.getDataDirectory().toString(),
 				request.getWorkingDirectory().toString(),
 				request.getStdoutFile() != null ? request.getStdoutFile().toString() : null,
@@ -217,7 +220,7 @@ public class ProcessManager {
 		return new ProcessHandle(request.getId(), pid);
 	}
 	
-	private native static long launch(String processId, String palesDirectory, String workDirectory, String outFile, String errFile, String executable, String[] argv);
+	private native static long launch(String execHelper, String processId, String palesDirectory, String workDirectory, String outFile, String errFile, String executable, String[] argv);
 	
 	private static String encodePalesId(String palesId) {
 		StringBuilder sb = new StringBuilder();
