@@ -3,6 +3,7 @@ package net.sf.pales;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
@@ -22,7 +23,7 @@ public class Activator implements BundleActivator {
 		try (InputStream is = bundleContext.getBundle().getEntry("/launcher/execw.exe").openStream()) {
 			Path tempFile = Files.createTempFile("pales", ".exe");
 			tempFile.toFile().deleteOnExit();
-			Files.copy(is, tempFile);
+			Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
 			Activator.execHelperPath = tempFile;
 		}
 	}
