@@ -34,6 +34,7 @@ public class ProcessManager {
 	
 	public void init(PalesConfiguration configuration) {
 		this.configuration = configuration;
+		prepareDatabaseDirectory();
 		startMonitoring();
 		List<Path> dbFiles = new ArrayList<>();
 		try (DirectoryStream<Path> stream = Files.newDirectoryStream(configuration.getDatabaseDirectory())) {
@@ -46,6 +47,16 @@ public class ProcessManager {
 		catch (IOException e) {
 			stopMonitoring();
 			throw new RuntimeException(e);
+		}
+	}
+	
+	private void prepareDatabaseDirectory() {
+		Path dbDirectory = configuration.getDatabaseDirectory();
+		try {
+			Files.createDirectories(dbDirectory);
+		}
+		catch (IOException e) {
+			throw new RuntimeException("Database directory does not exist and cannot be created: " + dbDirectory);
 		}
 	}
 	
