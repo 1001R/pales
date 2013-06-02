@@ -109,13 +109,13 @@ static int pales_exec(const char *execw, const char *procid, const char *dbdir, 
 
 #endif
 
-JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *env, jclass class, jstring procid, jstring palesdir,
+JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
 {
 	const char *c_procid, *c_palesdir, *c_workdir, *c_outfile = NULL, *c_errfile = NULL, *c_executable;
 	char *dbdir = NULL, *s;
 #	ifdef WIN32
-	char *execw = NULL;
+	const char *c_execw = NULL;
 #	endif
 	char **c_argv = NULL;
 	jlong result = -1;
@@ -125,17 +125,15 @@ JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *
 	c_palesdir = (*env)->GetStringUTFChars(env, palesdir, NULL);
 	c_workdir = (*env)->GetStringUTFChars(env, workdir, NULL);
 	c_executable = (*env)->GetStringUTFChars(env, executable, NULL);
+#	ifdef WIN32
+	c_execw = (*env)->GetStringUTFChars(env, execwPath, NULL);
+#	endif
 	if (outfile != NULL) {
 		c_outfile = (*env)->GetStringUTFChars(env, outfile, NULL);
 	}
 	if (errfile != NULL) {
 		c_errfile = (*env)->GetStringUTFChars(env, errfile, NULL);
 	}
-#	ifdef WIN32
-	if ((execw = malloc(strlen(c_palesdir) + 15)) == NULL) {
-		goto cleanup;
-	}
-#	endif
 	if ((dbdir = malloc(strlen(c_palesdir) + 4)) == NULL) {
 		goto cleanup;
 	}
@@ -163,16 +161,12 @@ JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *
 			goto cleanup;
 		}
 	}
-#	ifdef WIN32
-	s = stpcpy(execw, c_palesdir);
-	s = stpcpy(s, "\\bin\\execw.exe");
-#	endif
 	s = stpcpy(dbdir, c_palesdir);
 	*s++ = PATHSEP;
 	s = stpcpy(s, "db");
 
 #	ifdef WIN32
-	result = pales_exec(execw, c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
+	result = pales_exec(c_execw, c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
 #	else
 	result = process_run(c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
 #	endif
@@ -183,11 +177,6 @@ cleanup:
 		}
 		free(c_argv);
 	}
-#	ifdef WIN32
-	if (execw != NULL) {
-		free(execw);
-	}
-#	endif
 	if (dbdir != NULL) {
 		free(dbdir);
 	}
@@ -201,6 +190,7 @@ cleanup:
 	(*env)->ReleaseStringUTFChars(env, workdir, c_workdir);
 	(*env)->ReleaseStringUTFChars(env, palesdir, c_palesdir);
 	(*env)->ReleaseStringUTFChars(env, procid, c_procid);
+	(*env)->ReleaseStringUTFChars(env, execwPath, c_execw);
 
 	if (result == -1) {
 		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
