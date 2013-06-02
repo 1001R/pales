@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
 JNIEXPORT void JNICALL PREFIX(Java_net_sf_pales_OS_cancelProcess)(JNIEnv *, jclass, jstring, jlong);
-JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *, jclass, jstring, jstring, jstring, jstring, jstring, jstring, jobjectArray);
+JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *, jclass, jstring, jstring, jstring, jstring, jstring, jstring, jstring, jobjectArray);
 
 #ifdef __cplusplus
 }
