@@ -109,7 +109,7 @@ static int pales_exec(const char *execw, const char *procid, const char *dbdir, 
 
 #endif
 
-JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring procid, jstring palesdir,
+JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
 {
 	const char *c_procid, *c_palesdir, *c_workdir, *c_outfile = NULL, *c_errfile = NULL, *c_executable;
