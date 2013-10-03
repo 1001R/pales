@@ -32,10 +32,10 @@ int db_close(database_t *db)
 	return 0;
 }
 
-static char *process_encode(database_t *db, process_t *proc)
+static char *process_encode(database_t *db, process_t *proc, char *path, int pathlen)
 {
 	char pid[32];
-	char *filename, *s;
+	char *s;
 	int len;
 
 	if (proc->status == running) {
@@ -46,11 +46,16 @@ static char *process_encode(database_t *db, process_t *proc)
 	if (proc->status == running) {
 		len += strlen(pid) + 1;
 	}
+	if (len > pathlen) {
+		return NULL;
+	}
+	/*
 	filename = (char *)malloc(len);
 	if (filename == NULL) {
 		return NULL;
 	}
-	s = filename;
+	*/
+	s = path;
 	strcpy(s, db->path);
 	s += strlen(db->path);
 	*s++ = '\\';
@@ -72,7 +77,7 @@ static char *process_encode(database_t *db, process_t *proc)
 		break;
 	}
 	*s = '\0';
-	return filename;
+	return path;
 }
 
 /*
@@ -133,7 +138,7 @@ static char *path_join(const char *directory, const char *filename)
 
 static int create_empty_file(const char *directory, const char *filename)
 {
-	char *path, *s;
+	char path[256], *s;
 	int len = 0;
 	HANDLE h;
 	bool addpathsep = false;
@@ -144,7 +149,7 @@ static int create_empty_file(const char *directory, const char *filename)
 		len++;
 	}
 	len += strlen(filename);
-	if ((path = malloc(len + 1)) == NULL) {
+	if (len + 1 > sizeof(path)) {
 		return -1;
 	}
 	s = path;
@@ -155,7 +160,6 @@ static int create_empty_file(const char *directory, const char *filename)
 	}
 	strcpy(s, filename);
 	h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-	free(path);
 	if (h == INVALID_HANDLE_VALUE) {
 		return -1;
 	}
@@ -166,8 +170,58 @@ static int create_empty_file(const char *directory, const char *filename)
 int db_update(database_t *db, process_t *proc)
 {
 	int rv;
-	char *path = process_encode(db, proc);
+	char path[256], *sep;
+
+	if (process_encode(db, proc, path, sizeof(path)) == NULL) {
+		return -1;
+	}
+	sep = strrchr(path, PATHSEP);
+
+	*sep = '\0';
+	rv = create_empty_file(path, sep + 1);
+	return rv;
+}
+
+int db_update_error(database_t *db, const char *id)
+{
+	int rv;
+	char *path; // = process_encode(db, proc);
 	char *sep = strrchr(path, PATHSEP);
+
+	char *filename, *s;
+	int len;
+
+
+	len = strlen(db->path) + 1 + strlen(id) + 3;
+	filename = (char *)malloc(len);
+	if (filename == NULL) {
+		return NULL;
+	}
+	s = filename;
+	strcpy(s, db->path);
+	s += strlen(db->path);
+	*s++ = '\\';
+	strcpy(s, proc->id);
+	s += strlen(proc->id);
+	*s++ = SEPARATOR;
+	switch (proc->status) {
+	case running:
+		*s++ = 'R';
+		*s++ = SEPARATOR;
+		strcpy(s, pid);
+		s += strlen(pid);
+		break;
+	case finished:
+		*s++ = 'F';
+		break;
+	case cancelled:
+		*s++ = 'C';
+		break;
+	}
+	*s = '\0';
+	return filename;
+
+
 
 	*sep = '\0';
 	rv = create_empty_file(path, sep + 1);

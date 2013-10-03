@@ -28,11 +28,11 @@ int process_cancel(process_t *proc)
 	return -1;
 }
 
-static char *build_cmdline(int argc, char **argv)
+static int build_cmdline(char *cmdline, int clen, int argc, char **argv)
 {
 	int len = 1;
 	bool quote[argc];
-	char *cmdline, *s;
+	char *s;
 
 	for (int i = 0; i < argc; i++) {
 		quote[i] = false;
@@ -50,9 +50,8 @@ static char *build_cmdline(int argc, char **argv)
 			len++;
 		}
 	}
-	cmdline = (char *)malloc(len);
-	if (cmdline == NULL) {
-		return NULL;
+	if (len >= clen) {
+		return -1;
 	}
 	s = cmdline;
 	for (int i = 0; i < argc; i++) {
@@ -70,7 +69,7 @@ static char *build_cmdline(int argc, char **argv)
 		}
 	}
 	*s = '\0';
-	return cmdline;
+	return 0;
 }
 
 /*
@@ -119,46 +118,28 @@ int launch_request_new(const char *id,
 	const char *workdir,
 	const char *outpath,
 	const char *errpath,
-	launch_request_t **request)
+	launch_request_t *request)
 {
-	*request = malloc(sizeof(**request));
-	if (*request == NULL) {
+	memset(*request, 0, sizeof(*request));
+
+	if (strlcpy(request->id, id, sizeof(request->id) >= sizeof(request->id))) {
 		return -1;
 	}
-	memset(*request, 0, sizeof(**request));
-	if (((*request)->id = strdup(id)) == NULL) {
-		launch_request_free(*request);
+	if (strlcpy(request->dbpath, id, sizeof(request->dbpath) >= sizeof(request->dbpath))) {
 		return -1;
 	}
-	if (((*request)->dbpath = strdup(dbpath)) == NULL) {
-		launch_request_free(*request);
+
+	if (workdir != NULL && strlcpy(request->workdir, workdir, sizeof(request->workdir) >= sizeof(request->workdir))) {
 		return -1;
 	}
-	if (workdir != NULL && ((*request)->workdir = strdup(workdir)) == NULL) {
-		launch_request_free(*request);
+	if (strlcpy(request->outpath, outpath != NULL ? outpath : "NUL", sizeof(request->outpath)) >= sizeof(request->outpath)) {
 		return -1;
 	}
-	if (((*request)->outpath = strdup(outpath != NULL ? outpath : "NUL")) == NULL) {
-		launch_request_free(*request);
-		return -1;
-	}
-	if (((*request)->errpath = strdup(errpath != NULL ? errpath : "NUL")) == NULL) {
-		launch_request_free(*request);
+	if (strlcpy(request->errpath, errpath != NULL ? errpath : "NUL", sizeof(request->errpath)) >= sizeof(request->errpath)) {
 		return -1;
 	}
 	return 0;
 }
-
-void launch_request_free(launch_request_t *request)
-{
-	FREE_IF_NOT_NULL(request->id);
-	FREE_IF_NOT_NULL(request->dbpath);
-	FREE_IF_NOT_NULL(request->workdir);
-	FREE_IF_NOT_NULL(request->outpath);
-	FREE_IF_NOT_NULL(request->errpath);
-	FREE_IF_NOT_NULL(request);
-}
-
 
 int process_new(const char *id, size_t idlen, process_t **process) {
 	char *procid;
@@ -192,7 +173,7 @@ void process_free(process_t *p) {
 
 int process_launch(const launch_request_t *request, int argc, char **argv, process_t **process)
 {
-	char *cmdline = NULL;
+	char cmdline[32768];
 	int retval = -1;
 	STARTUPINFO sinfo;
 	PROCESS_INFORMATION pinfo;
@@ -205,8 +186,7 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 		goto cleanup;
 	}
 
-	cmdline = build_cmdline(argc, argv);
-	if (cmdline == NULL) {
+	if (build_cmdline(cmdline, argc, argv) != 0) {
 		goto cleanup;
 	}
 
@@ -266,13 +246,16 @@ cleanup:
 			if ((*process)->handle != NULL) {
 				TerminateProcess((*process)->handle, 1);
 				CloseHandle((*process)->handle);
+				(*process)->handle = NULL;
 			}
 			if ((*process)->job != NULL) {
 				CloseHandle((*process)->job);
+				(*process)->job = NULL;
 			}
-			FREE_IF_NOT_NULL((*process)->id);
-			free(*process);
-			*process = NULL;
+			// FREE_IF_NOT_NULL((*process)->id);
+			// free(*process);
+			// *process = NULL;
+			(*process)->status = error;
 		}
 	}
 	return retval;

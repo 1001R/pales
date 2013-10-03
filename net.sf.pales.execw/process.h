@@ -7,7 +7,8 @@
 enum procstat {
 	running,
 	finished,
-	cancelled
+	cancelled,
+	error
 };
 
 typedef enum procstat procstat_t;
@@ -23,11 +24,11 @@ typedef struct process {
 
 
 typedef struct launch_request {
-	const char *dbpath;
-	const char *workdir;
-	const char *errpath;
-	const char *outpath;
-	const char *id;
+	char dbpath[256];
+	char workdir[256];
+	char errpath[256];
+	char outpath[256];
+	char id[64];
 } launch_request_t;
 
 

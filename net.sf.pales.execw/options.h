@@ -4,11 +4,11 @@
 #include <stddef.h>
 
 struct options {
-	const char *workdir;
-	const char *datadir;
-	const char *outfile;
-	const char *errfile;
-	const char *procid;
+	char workdir[256];
+	char datadir[256];
+	char outfile[256];
+	char errfile[256];
+	char procid[64];
 };
 
 typedef struct options options_t;

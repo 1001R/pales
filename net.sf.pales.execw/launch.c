@@ -17,7 +17,7 @@ int main(int argc, char **argv)
 	HANDLE h_wait[2];
 	int r;
 	database_t db;
-	launch_request_t *request = NULL;
+	launch_request_t request;
 	process_t *process = NULL;
 
 
@@ -34,6 +34,7 @@ int main(int argc, char **argv)
 	}
 	
 	if (process_launch(request, argc - optind, argv + optind, &process) != 0) {
+		db_update(&db, process);
 		goto cleanup;
 	}
 	db_update(&db, process);
