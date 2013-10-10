@@ -52,6 +52,7 @@ int main(int argc, char **argv)
 			// cancel process
 			process_cancel(process);
 			process->status = cancelled;
+			WaitForSingleObject(process->handle, 10000);
 		}
 		else {
 			process->status = finished;
