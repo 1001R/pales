@@ -302,7 +302,7 @@ public class ProcessManager {
 			try {
 				deleteRetry(p);
 			} catch (Exception e) {
-				throw new RuntimeException(e);
+				p.toFile().deleteOnExit();
 			}
 		}
 	}
