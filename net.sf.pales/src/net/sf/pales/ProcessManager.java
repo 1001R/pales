@@ -300,10 +300,31 @@ public class ProcessManager {
 		}
 		for (Path p : filesToDelete) {
 			try {
-				Files.delete(p);
+				deleteRetry(p);
+			} catch (Exception e) {
+				throw new RuntimeException(e);
 			}
-			catch (IOException e) {
-				p.toFile().deleteOnExit();
+		}
+	}
+	
+	private void deleteRetry(Path p) throws IOException, InterruptedException {
+		long sleep = 2000L;
+		int tries = 0;
+		while (true) {
+			try {
+				Files.delete(p);
+				return;
+			} catch (IOException ioEx) {
+				if (tries < 3) {
+					tries++;
+					try {
+						Thread.sleep(sleep*tries);
+					} catch (InterruptedException intEx) {
+						throw intEx;
+					}
+				} else {
+					throw ioEx;
+				}
 			}
 		}
 	}
