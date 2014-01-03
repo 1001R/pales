@@ -2,19 +2,24 @@
 #define OPTIONS_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include "error.h"
 
 struct options {
-	const char *workdir;
-	const char *datadir;
-	const char *outfile;
-	const char *errfile;
-	const char *procid;
+	const wchar_t *workdir;
+	const wchar_t *datadir;
+	const wchar_t *outfile;
+	const wchar_t *errfile;
+	const wchar_t *procid;
+	size_t argc;
+	const wchar_t **argv;
 };
 
 typedef struct options options_t;
 
-#define OPTION(flag, member) { (flag), offsetof(options_t, member) }
+bool parse_args(options_t *opts, int argc, const wchar_t **argv, error_t *err);
 
-int parse_args(options_t *opts, int argc, char **argv, int *optind);
+extern const char *PALES_HELP;
 
 #endif
