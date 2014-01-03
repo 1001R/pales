@@ -7,36 +7,84 @@
 #include "options.h"
 #include "process.h"
 #include "database.h"
+#include "log.h"
+#include "error.h"
 
-int main(int argc, char **argv)
+#define WIDEN2(x) L ## x
+#define WIDEN(x) WIDEN2(x)
+#define WFILE WIDEN(__FILE__)
+
+void handle_error(const wchar_t *dbdir, const wchar_t *procid, const char *errmsg) {
+	size_t dblen, idlen, pathlen;
+	bool addsep = false;
+	wchar_t *path, *s;
+	HANDLE f;
+
+	pathlen = dblen = wcslen(dbdir);
+	if (dbdir[dblen - 1] != L'\\') {
+		addsep = true;
+		pathlen++;
+	}
+	idlen = wcslen(procid);
+	pathlen += idlen;
+	pathlen += 7;
+
+	s = path = alloca(pathlen * sizeof(wchar_t));
+	wcsncpy(s, dbdir, dblen);
+	s += dblen;
+	if (addsep) {
+		*s++ = L'\\';
+	}
+	wcsncpy(s, procid, idlen);
+	s += idlen;
+	wcsncpy(s, L"-E.msg", 7);
+
+	if (errmsg != NULL && errmsg[0] != '\0') {
+		f = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (f != INVALID_HANDLE_VALUE) {
+			DWORD nwritten = 0;
+			WriteFile(f, errmsg, strlen(errmsg), &nwritten, NULL);
+			CloseHandle(f);
+		}
+		else {
+//			log(ERROR, L"Cannot create file `%s'", path);
+		}
+	}
+	path[pathlen - 4] = L'\0';
+	f = CreateFile(path, 0, FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (f != INVALID_HANDLE_VALUE) {
+		CloseHandle(f);
+	}
+	else {
+//		log(ERROR, L"Cannot create file `%s'", path);
+	}
+}
+
+int wmain(int argc, const wchar_t **argv)
 {
-	int optind;
 	options_t opts;
 	int exit_code = EXIT_FAILURE;
-	HANDLE h_event = INVALID_HANDLE_VALUE;
-	HANDLE h_wait[2];
+	HANDLE h_event = NULL;
+	HANDLE h_wait[2] = { NULL, NULL };
 	int r;
 	database_t db;
-	launch_request_t *request = NULL;
 	process_t *process = NULL;
+	error_t error;
 
+	error_init(&error);
 
-	if (parse_args(&opts, argc, argv, &optind) != 0) {
+	if (!parse_args(&opts, argc, argv, &error)) {
 		goto cleanup;
 	}
 	
-	if (launch_request_new(opts.procid, opts.datadir, opts.workdir, opts.outfile, opts.errfile, &request) != 0) {
-		goto cleanup;
-	}
-
-	if (db_open(&db, opts.datadir) != 0) {
+	if (db_open(&db, opts.datadir, &error) != 0) {
 		goto cleanup;
 	}
 	
-	if (process_launch(request, argc - optind, argv + optind, &process) != 0) {
+	if (process_launch(&opts, &process, &error) != 0) {
 		goto cleanup;
 	}
-	db_update(&db, process);
+	db_update(&db, process, &error);
 
 	h_wait[0] = process->handle;
 	h_event = CreateEvent(NULL, FALSE, FALSE, process->id);
@@ -57,15 +105,19 @@ int main(int argc, char **argv)
 		else {
 			process->status = finished;
 		}
-		db_update(&db, process);
+		db_update(&db, process, &error);
 		exit_code = EXIT_SUCCESS;
 	}
 cleanup:
+	if (error.message != NULL) {
+		db_error(&db, process, &error);
+	}
 	if (process != NULL) {
 		process_free(process);
 	}
 	if (h_event != NULL) {
 		CloseHandle(h_event);
 	}
+
 	return exit_code;
 }

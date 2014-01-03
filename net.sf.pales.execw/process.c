@@ -28,48 +28,69 @@ int process_cancel(process_t *proc)
 	return -1;
 }
 
-static char *build_cmdline(int argc, char **argv)
-{
-	int len = 1;
-	bool quote[argc];
-	char *cmdline, *s;
 
-	for (int i = 0; i < argc; i++) {
-		quote[i] = false;
-		len += strlen(argv[i]);
-		for (int j = 0; j < strlen(argv[i]); j++) {
-			if (isspace(argv[i][j])) {
-				quote[i] = true;
-				break;
+static bool quot_required(const wchar_t *arg, size_t *quotsz)
+{
+	bool retval = false;
+	*quotsz = 0;
+	for (const wchar_t *s = arg; *s != L'\0'; s++) {
+		if (!retval) {
+			if (iswspace(*s) || *s == L'"') {
+				retval = true;
+				quotsz += 2;
 			}
 		}
-		if (quote[i]) {
-			len += 2;
+		(*quotsz)++;
+		if (*s == L'"') {
+			(*quotsz)++;
 		}
+	}
+	return retval;
+}
+
+static wchar_t *string_copy(wchar_t *dst, const wchar_t *src, bool quote)
+{
+	if (quote) {
+		*dst++ = L'"';
+	}
+	for (const wchar_t *s = src; *s != L'\0'; s++) {
+		if (quote && *s == L'"') {
+			*dst++ = L'\\';
+		}
+		*dst++ = *s;
+	}
+	if (quote) {
+		*dst++ = L'"';
+	}
+	return dst;
+}
+
+static wchar_t *build_cmdline(int argc, const wchar_t **argv)
+{
+	bool quote[argc];
+	size_t len = 1;
+	wchar_t *cmdline, *s;
+
+	for (int i = 0; i < argc; i++) {
+		size_t arglen;
+		quote[i] = quot_required(argv[i], &arglen);
+		len += arglen;
 		if (i > 0) {
 			len++;
 		}
 	}
-	cmdline = (char *)malloc(len);
+	cmdline = (wchar_t *)malloc(len * sizeof(wchar_t));
 	if (cmdline == NULL) {
 		return NULL;
 	}
 	s = cmdline;
 	for (int i = 0; i < argc; i++) {
-		int n = strlen(argv[i]);
 		if (i > 0) {
 			*s++ = ' ';
 		}
-		if (quote[i]) {
-			*s++ = '"';
-		}
-		strcpy(s, argv[i]);
-		s += n;
-		if (quote[i]) {
-			*s++ = '"';
-		}
+		s = string_copy(s, argv[i], quote[i]);
 	}
-	*s = '\0';
+	*s = L'\0';
 	return cmdline;
 }
 
@@ -90,7 +111,7 @@ static int create_id(uint64_t *id)
 }
 */
 
-static HANDLE create_std_handle(DWORD std_handle, const char *path, io_mode_t mode)
+static HANDLE create_std_handle(DWORD std_handle, const wchar_t *path, io_mode_t mode)
 {
 	HANDLE h = GetStdHandle(std_handle);
 	if (h != INVALID_HANDLE_VALUE) {
@@ -113,12 +134,12 @@ static HANDLE create_std_handle(DWORD std_handle, const char *path, io_mode_t mo
 	return h;
 }
 
-
-int launch_request_new(const char *id,
-	const char *dbpath,
-	const char *workdir,
-	const char *outpath,
-	const char *errpath,
+/*
+int launch_request_new(const wchar_t *id,
+	const wchar_t *dbpath,
+	const wchar_t *workdir,
+	const wchar_t *outpath,
+	const wchar_t *errpath,
 	launch_request_t **request)
 {
 	*request = malloc(sizeof(**request));
@@ -149,6 +170,7 @@ int launch_request_new(const char *id,
 	return 0;
 }
 
+
 void launch_request_free(launch_request_t *request)
 {
 	FREE_IF_NOT_NULL(request->id);
@@ -158,29 +180,10 @@ void launch_request_free(launch_request_t *request)
 	FREE_IF_NOT_NULL(request->errpath);
 	FREE_IF_NOT_NULL(request);
 }
+*/
 
-
-int process_new(const char *id, size_t idlen, process_t **process) {
-	char *procid;
-	*process = (process_t*) malloc(sizeof(process_t));
-	if (*process == NULL) {
-		return -1;
-	}
-	memset(*process, 0, sizeof(**process));
-	procid = (char*) malloc(idlen + 1);
-	if (procid == NULL) {
-		free(*process);
-		*process = NULL;
-		return -1;
-	}
-	strncpy(procid, id, idlen);
-	procid[idlen] = '\0';
-	(*process)->id = procid;
-	return 0;
-}
 
 void process_free(process_t *p) {
-	FREE_IF_NOT_NULL(p->id);
 	if (p->handle != NULL) {
 		CloseHandle(p->handle);
 	}
@@ -190,9 +193,9 @@ void process_free(process_t *p) {
 	free(p);
 }
 
-int process_launch(const launch_request_t *request, int argc, char **argv, process_t **process)
+int process_launch(const options_t *opts, process_t **process, error_t *err)
 {
-	char *cmdline = NULL;
+	wchar_t *cmdline = NULL;
 	int retval = -1;
 	STARTUPINFO sinfo;
 	PROCESS_INFORMATION pinfo;
@@ -201,11 +204,7 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 	memset(&sinfo, 0, sizeof(sinfo));
 	memset(&pinfo, 0, sizeof(pinfo));
 
-	if (request->id == NULL || request->dbpath == NULL) {
-		goto cleanup;
-	}
-
-	cmdline = build_cmdline(argc, argv);
+	cmdline = build_cmdline(opts->argc, opts->argv);
 	if (cmdline == NULL) {
 		goto cleanup;
 	}
@@ -213,9 +212,9 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 	sinfo.cb = sizeof(sinfo);
 	sinfo.dwFlags = STARTF_USESTDHANDLES;
 
-	sinfo.hStdInput = create_std_handle(STD_INPUT_HANDLE, "NUL", in);
-	sinfo.hStdOutput = create_std_handle(STD_OUTPUT_HANDLE, request->outpath, out);
-	sinfo.hStdError = create_std_handle(STD_ERROR_HANDLE, request->errpath, out);
+	sinfo.hStdInput = create_std_handle(STD_INPUT_HANDLE, L"NUL", in);
+	sinfo.hStdOutput = create_std_handle(STD_OUTPUT_HANDLE, opts->outfile, out);
+	sinfo.hStdError = create_std_handle(STD_ERROR_HANDLE, opts->errfile, out);
 
 	if (sinfo.hStdInput == INVALID_HANDLE_VALUE || sinfo.hStdOutput == INVALID_HANDLE_VALUE || sinfo.hStdError == INVALID_HANDLE_VALUE) {
 		goto cleanup;
@@ -226,12 +225,13 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 		goto cleanup;
 	}
 	memset(*process, 0, sizeof(**process));
-	if (((*process)->id = strdup(request->id)) == NULL) {
-		goto cleanup;
-	}
-	if (!CreateProcess(argv[0], cmdline, NULL, NULL, true,
+	(*process)->id = opts->procid;
+	if (!CreateProcess(opts->argv[0], cmdline, NULL, NULL, true,
 			CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED | CREATE_BREAKAWAY_FROM_JOB,
-			NULL, request->workdir, &sinfo, &pinfo)) {
+			NULL, opts->workdir, &sinfo, &pinfo)) {
+		(*process)->status = error;
+		error_apicall_fail(err, L"CreateProcess");
+		error_set_message(err, L"Cannot create process");
 		goto cleanup;
 	}
 	(*process)->pid = pinfo.dwProcessId;
@@ -266,13 +266,14 @@ cleanup:
 			if ((*process)->handle != NULL) {
 				TerminateProcess((*process)->handle, 1);
 				CloseHandle((*process)->handle);
+				(*process)->handle = NULL;
 			}
 			if ((*process)->job != NULL) {
 				CloseHandle((*process)->job);
+				(*process)->job = NULL;
 			}
-			FREE_IF_NOT_NULL((*process)->id);
-			free(*process);
-			*process = NULL;
+//			free(*process);
+//			*process = NULL;
 		}
 	}
 	return retval;

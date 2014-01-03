@@ -1,52 +1,68 @@
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include "options.h"
 
-struct optspec {
-	const char *flag;
-	int offset;
-};
 
-typedef struct optspec optspec_t;
-
-static optspec_t optspecs[] = {
-	OPTION("-w", workdir),
-	OPTION("-o", outfile),
-	OPTION("-e", errfile),
-	OPTION("-i", procid),
-	OPTION("-d", datadir)
-};
-
-bool is_valid(options_t *opts)
+bool is_valid(options_t *opts, error_t *err)
 {
-	bool valid = true;
-
-	valid &= (opts->datadir != NULL);
-	return valid;
+	if (opts->datadir == NULL || opts->datadir[0] == L'\0') {
+		error_set_message(err, L"No database directory specified");
+		return false;
+	}
+	if (opts->procid == NULL || opts->procid[0] == L'\0') {
+		error_set_message(err, L"No process identifier specified");
+		return false;
+	}
+	for (const wchar_t *s = opts->procid; *s != L'\0'; s++) {
+		if (!iswalnum(*s)) {
+			error_set_message(err, L"Process identifier contains non-alphanumeric characters");
+			return false;
+		}
+	}
+	if (opts->argc == 0) {
+		error_set_message(err, L"No executable specified");
+		return false;
+	}
+	return true;
 }
 
-int parse_args(options_t *opts, int argc, char **argv, int *optind)
+bool parse_args(options_t *opts, int argc, const wchar_t **argv, error_t *err)
 {
-	int i, j;
+	int i;
 
 	memset(opts, 0, sizeof(options_t));
+	opts->outfile = L"NUL";
+	opts->errfile = L"NUL";
 	for (i = 1; i < argc; i++) {
-		bool match = false;
-		for (j = 0; j < sizeof(optspecs) / sizeof(optspec_t); j++) {
-			if (strcmp(argv[i], optspecs[j].flag) == 0) {
-				match = true;
-				if (optspecs[j].offset >= 0) {
-					if (i == argc - 1) {
-						return -1;
-					}
-					*(const char**)(((char*) opts) + optspecs[j].offset) = argv[++i];
-				}
-			}
+		const wchar_t **ref = NULL;
+		if (wcscmp(argv[i], L"-w") == 0) {
+			ref = &(opts->workdir);
 		}
-		if (!match) {
+		else if (wcscmp(argv[i], L"-o") == 0) {
+			ref = &(opts->outfile);
+		}
+		else if (wcscmp(argv[i], L"-e") == 0) {
+			ref = &(opts->errfile);
+		}
+		else if (wcscmp(argv[i], L"-i") == 0) {
+			ref = &(opts->procid);
+		}
+		else if (wcscmp(argv[i], L"-d") == 0) {
+			ref = &(opts->datadir);
+		}
+		if (ref != NULL) {
+			if (i == argc - 1) {
+				error_set_message(err, L"Missing argument to command line option");
+				return false;
+			}
+			*ref = argv[++i];
+		}
+		else {
 			break;
 		}
 	}
-	*optind = i;
-	return is_valid(opts) ? 0 : -1;
+	opts->argc = argc - i;
+	opts->argv = argv + i;
+	return is_valid(opts, err);
 }
