@@ -4,6 +4,7 @@ package net.sf.pales;
 public class ProcessHandle implements Comparable<ProcessHandle> {
 	private long pid;
 	private final String palesId;
+	private int exitCode;
 	
 	ProcessHandle(String palesId) {
 		this.palesId = palesId;
@@ -25,6 +26,14 @@ public class ProcessHandle implements Comparable<ProcessHandle> {
 
 	public String getPalesId() {
 		return palesId;
+	}
+	
+	public int getExitCode() {
+		return exitCode;
+	}
+	
+	public void setExitCode(int exitCode) {
+		this.exitCode = exitCode;
 	}
 	
 	@Override

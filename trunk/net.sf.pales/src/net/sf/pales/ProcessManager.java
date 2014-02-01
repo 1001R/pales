@@ -149,6 +149,19 @@ public class ProcessManager {
 		return ProcessStatus.fromAbbreviation(fn.charAt(i + 1));
 	}
 	
+	private int getProcessExitCode(Path path) {
+		String fn = path.getFileName().toString();
+		int i = fn.lastIndexOf('-');
+		if (i < 0) {
+			throw new IllegalArgumentException();
+		}
+		try {
+			return Integer.parseInt(fn.substring(i + 1));
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException();
+		}
+	}
+	
 	private long getProcessPid(Path path) {
 		String fn = path.getFileName().toString();
 		int i = fn.indexOf('-');
@@ -182,6 +195,7 @@ public class ProcessManager {
     		markRunning(handle, timestamp);
     		break;
     	case FINISHED:
+    		handle.setExitCode(getProcessExitCode(file));
     		markFinished(handle, timestamp);
     		break;
     	case CANCELLED:
