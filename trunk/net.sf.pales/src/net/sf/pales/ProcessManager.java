@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -31,6 +33,7 @@ public class ProcessManager {
 	private volatile boolean monitoring = false;
 	private ListenerList listeners = new ListenerList();
 	private ConcurrentHashMap<String, Long> processIdToPid = new ConcurrentHashMap<>();
+	private static final Logger LOGGER = Logger.getLogger(ProcessManager.class.getName());
 	
 	public void init(PalesConfiguration configuration) {
 		this.configuration = configuration;
@@ -329,6 +332,7 @@ public class ProcessManager {
 				Files.delete(p);
 				return;
 			} catch (IOException ioEx) {
+				LOGGER.log(Level.WARNING, "Attempt " + (tries + 1) + " + to delete file \"" + p + "\" failed", ioEx);
 				if (tries < 3) {
 					tries++;
 					try {
