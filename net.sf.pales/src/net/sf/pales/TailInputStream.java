@@ -23,13 +23,19 @@ public class TailInputStream extends InputStream {
 	private final Path path;
 	private long filePosition = 0;
 	private boolean fileDeleted = false;
+	private boolean poll = false;
 	
 	private final ByteBuffer readBuffer;
 	
 	public TailInputStream(Path path) throws IOException {
+		this(path, true);
+	}
+	
+	public TailInputStream(Path path, boolean poll) throws IOException {
 		this.path = path.toRealPath(LinkOption.NOFOLLOW_LINKS);
 		readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 		readBuffer.flip();
+		this.poll = poll;
 	}
 	
 	@Override
@@ -97,12 +103,34 @@ public class TailInputStream extends InputStream {
 		}
 	}
 	
+	private void pollForFileToGrow() throws IOException, InterruptedException {
+		long fileSize = filePosition;
+		while (fileSize <= filePosition) {
+			Thread.sleep(1000);
+			try {
+				fileSize = getFileSize();
+			} catch (IOException e) {
+				return;
+			}
+		};
+	}
+	
 	private void waitForFileToGrow() throws IOException, InterruptedException {
+		if (poll) {
+			pollForFileToGrow();
+		} else {
+			watchFile();
+		}
+	}
+	
+	
+	private void watchFile() throws IOException, InterruptedException {
 		WatchService watchService = FileSystems.getDefault().newWatchService();
 		Path dirPath = path.getParent();
-		dirPath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+		WatchKey watchKey = dirPath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+		try {
 		while (true) {
-			WatchKey watchKey = watchService.take();
+			watchKey = watchService.take();
 			for (WatchEvent<?> event: watchKey.pollEvents()) {
 				boolean checkFileSize = false;
 				if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
@@ -119,8 +147,7 @@ public class TailInputStream extends InputStream {
 					}
 				}
 				if (checkFileSize) {
-					BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
-					if (attrs.size() > filePosition) {
+					if (getFileSize() > filePosition) {
 						watchKey.cancel();
 						return;
 					}					
@@ -131,10 +158,18 @@ public class TailInputStream extends InputStream {
 				break;
 			}
 		}
+		} finally {
+			watchKey.cancel();
+		}
+	}
+	
+	private long getFileSize() throws IOException {
+		BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
+		return attrs.size();
 	}
 	
 	public static void main(String[] args) throws IOException {
-		TailInputStream cis = new TailInputStream(FileSystems.getDefault().getPath("C:/Temp/log.txt"));
+		TailInputStream cis = new TailInputStream(FileSystems.getDefault().getPath("C:/Temp/log.txt"), true);
 		byte[] buf = new byte[4096];
 		int byteCount;
 		while ((byteCount = cis.read(buf)) > 0) {
