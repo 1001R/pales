@@ -128,36 +128,40 @@ public class TailInputStream extends InputStream {
 		WatchService watchService = FileSystems.getDefault().newWatchService();
 		Path dirPath = path.getParent();
 		WatchKey watchKey = dirPath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+		if (getFileSize() > filePosition) {
+			watchKey.cancel();
+			return;
+		}		
 		try {
-		while (true) {
-			watchKey = watchService.take();
-			for (WatchEvent<?> event: watchKey.pollEvents()) {
-				boolean checkFileSize = false;
-				if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
-					checkFileSize = true;
-				} else {					
-					Path file = ((WatchEvent<Path>) event).context();
-					if (file.equals(path.getFileName())) {
-						if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
-							checkFileSize = true;
-						} else if (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-							watchKey.cancel();
-							return;
+			while (true) {
+				watchKey = watchService.take();
+				for (WatchEvent<?> event: watchKey.pollEvents()) {
+					boolean checkFileSize = false;
+					if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+						checkFileSize = true;
+					} else {					
+						Path file = ((WatchEvent<Path>) event).context();
+						if (file.equals(path.getFileName())) {
+							if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
+								checkFileSize = true;
+							} else if (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
+								watchKey.cancel();
+								return;
+							}
 						}
 					}
+					if (checkFileSize) {
+						if (getFileSize() > filePosition) {
+							watchKey.cancel();
+							return;
+						}					
+					}
 				}
-				if (checkFileSize) {
-					if (getFileSize() > filePosition) {
-						watchKey.cancel();
-						return;
-					}					
+				// reset the key
+				if (!watchKey.reset()) {
+					break;
 				}
 			}
-			// reset the key
-			if (!watchKey.reset()) {
-				break;
-			}
-		}
 		} finally {
 			watchKey.cancel();
 		}
