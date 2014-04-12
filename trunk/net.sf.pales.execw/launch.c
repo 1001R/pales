@@ -1,3 +1,5 @@
+#define _CRT_RAND_S
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -55,6 +57,10 @@ int main(int argc, char **argv)
 			WaitForSingleObject(process->handle, 10000);
 		}
 		else {
+			if (!GetExitCodeProcess(process->handle, &(process->exitcode))) {
+				process->exitcode = 0;
+			}
+			process_wait(process);
 			process->status = finished;
 		}
 		db_update(&db, process);
