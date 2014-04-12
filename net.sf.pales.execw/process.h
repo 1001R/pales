@@ -18,6 +18,7 @@ typedef struct process {
 	HANDLE job;
 	DWORD pid;
 	procstat_t status;
+	DWORD exitcode;
 } process_t;
 
 
@@ -42,6 +43,7 @@ void launch_request_free(launch_request_t *request);
 int process_new(const char *id, size_t idlen, process_t **process);
 int process_launch(const launch_request_t *request, int argc, char **argv, process_t **process);
 int process_cancel(process_t *process);
+int process_wait(process_t *process);
 void process_free(process_t *p);
 
 

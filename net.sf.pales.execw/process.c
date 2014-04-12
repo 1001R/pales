@@ -13,8 +13,6 @@ typedef enum io_mode {
 }
 io_mode_t;
 
-extern char *strdup(const char *);
-
 int process_cancel(process_t *proc)
 {
 	if (TerminateJobObject(proc->job, 1)) {
@@ -28,16 +26,111 @@ int process_cancel(process_t *proc)
 	return -1;
 }
 
+static
+int GetActiveProcessCount(HANDLE job) {
+	JOBOBJECT_BASIC_ACCOUNTING_INFORMATION basicAccountingInfo;
+	if (!QueryInformationJobObject(job, JobObjectBasicAccountingInformation, &basicAccountingInfo, sizeof(basicAccountingInfo), NULL)) {
+		return -1;
+	}
+	return basicAccountingInfo.ActiveProcesses;
+}
+
+int process_wait(process_t *proc)
+{
+	/*
+	DWORD completionCode;
+	HANDLE completionKey, completionPortHandle;
+	LPOVERLAPPED ovl;
+	JOBOBJECT_BASIC_ACCOUNTING_INFORMATION basicAccountingInfo;
+	JOBOBJECT_ASSOCIATE_COMPLETION_PORT completionPort;
+	*/
+
+	for (int i = 0; i < 60 * 15; i++) {
+		int processCount = GetActiveProcessCount(proc->job);
+		if (processCount == -1) {
+			return -1;
+		}
+		if (processCount == 0) {
+			return 0;
+		}
+		Sleep(1000);
+	}
+	return -1;
+	/*
+	if (!QueryInformationJobObject(proc->job, JobObjectBasicAccountingInformation, &basicAccountingInfo, sizeof(basicAccountingInfo), NULL)) {
+		return -1;
+	}
+	if (basicAccountingInfo.ActiveProcesses == 0) {
+		return 0;
+	}
+	
+	completionPortHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
+	if (proc->completionPortHandle == NULL) {
+		return -1;
+	}
+	completionPort.CompletionKey = proc->job;
+	completionPort.CompletionPort = completionPortHandle;
+	if (!SetInformationJobObject(proc->job,
+			JobObjectAssociateCompletionPortInformation,
+			&completionPort, sizeof(completionPort))) {
+		DWORD e = GetLastError();
+		CloseHandle(completionPortHandle);
+		return -1;
+	}
+	if (!QueryInformationJobObject(proc->job, JobObjectBasicAccountingInformation, &basicAccountingInfo, sizeof(basicAccountingInfo), NULL)) {
+		CloseHandle(completionPortHandle);
+		return -1;
+	}
+	if (basicAccountingInfo.ActiveProcesses == 0) {
+		CloseHandle(completionPortHandle);
+		return 0;
+	}
+	while (true) {
+		if (!GetQueuedCompletionStatus(proc->completionPortHandle, &completionCode,
+		          (PULONG_PTR) &completionKey, &ovl, INFINITE)) {
+			CloseHandle(completionPortHandle);
+			return -1;
+		}
+		if (completionKey == proc->job && completionCode == JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO) {
+			return 0;
+		}
+	}
+	*/
+}
+
+/*
+static
+int create_completion_port(process_t *proc)
+{
+	JOBOBJECT_ASSOCIATE_COMPLETION_PORT completionPort;
+	proc->completionPortHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
+	if (proc->completionPortHandle == NULL) {
+		return -1;
+	}
+	completionPort.CompletionKey = proc->job;
+	completionPort.CompletionPort = proc->completionPortHandle;
+	if (!SetInformationJobObject(proc->job,
+			JobObjectAssociateCompletionPortInformation,
+			&completionPort, sizeof(completionPort))) {
+		CloseHandle(proc->completionPortHandle);
+		proc->completionPortHandle = NULL;
+		return -1;
+	}
+	return 0;
+}
+*/
+
 static char *build_cmdline(int argc, char **argv)
 {
 	int len = 1;
-	bool quote[argc];
+	bool *quote;
 	char *cmdline, *s;
 
+	quote = _alloca(sizeof(bool) * argc);
 	for (int i = 0; i < argc; i++) {
 		quote[i] = false;
 		len += strlen(argv[i]);
-		for (int j = 0; j < strlen(argv[i]); j++) {
+		for (size_t j = 0; j < strlen(argv[i]); j++) {
 			if (isspace(argv[i][j])) {
 				quote[i] = true;
 				break;
@@ -104,7 +197,7 @@ static HANDLE create_std_handle(DWORD std_handle, const char *path, io_mode_t mo
 	}
 	h = CreateFile(path, 
 		mode == out ? GENERIC_WRITE : GENERIC_READ,
-		FILE_SHARE_READ | FILE_SHARE_WRITE,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 		NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
 		return INVALID_HANDLE_VALUE;
@@ -126,23 +219,23 @@ int launch_request_new(const char *id,
 		return -1;
 	}
 	memset(*request, 0, sizeof(**request));
-	if (((*request)->id = strdup(id)) == NULL) {
+	if (((*request)->id = _strdup(id)) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (((*request)->dbpath = strdup(dbpath)) == NULL) {
+	if (((*request)->dbpath = _strdup(dbpath)) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (workdir != NULL && ((*request)->workdir = strdup(workdir)) == NULL) {
+	if (workdir != NULL && ((*request)->workdir = _strdup(workdir)) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (((*request)->outpath = strdup(outpath != NULL ? outpath : "NUL")) == NULL) {
+	if (((*request)->outpath = _strdup(outpath != NULL ? outpath : "NUL")) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
-	if (((*request)->errpath = strdup(errpath != NULL ? errpath : "NUL")) == NULL) {
+	if (((*request)->errpath = _strdup(errpath != NULL ? errpath : "NUL")) == NULL) {
 		launch_request_free(*request);
 		return -1;
 	}
@@ -226,7 +319,7 @@ int process_launch(const launch_request_t *request, int argc, char **argv, proce
 		goto cleanup;
 	}
 	memset(*process, 0, sizeof(**process));
-	if (((*process)->id = strdup(request->id)) == NULL) {
+	if (((*process)->id = _strdup(request->id)) == NULL) {
 		goto cleanup;
 	}
 	if (!CreateProcess(argv[0], cmdline, NULL, NULL, true,

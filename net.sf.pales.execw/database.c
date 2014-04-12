@@ -34,17 +34,23 @@ int db_close(database_t *db)
 
 static char *process_encode(database_t *db, process_t *proc)
 {
-	char pid[32];
+	char pid[32], exitcode[32];
 	char *filename, *s;
 	int len;
 
 	if (proc->status == running) {
-		snprintf(pid, sizeof(pid), "%ld", proc->pid);
+		_snprintf(pid, sizeof(pid), "%ld", proc->pid);
+	}
+	if (proc->status == finished) {
+		_snprintf(exitcode, sizeof(exitcode), "%ld", proc->exitcode);
 	}
 	
 	len = strlen(db->path) + 1 + strlen(proc->id) + 3;
 	if (proc->status == running) {
 		len += strlen(pid) + 1;
+	}
+	if (proc->status == finished) {
+		len += strlen(exitcode) + 1;
 	}
 	filename = (char *)malloc(len);
 	if (filename == NULL) {
@@ -66,6 +72,9 @@ static char *process_encode(database_t *db, process_t *proc)
 		break;
 	case finished:
 		*s++ = 'F';
+		*s++ = SEPARATOR;
+		strcpy(s, exitcode);
+		s += strlen(exitcode);
 		break;
 	case cancelled:
 		*s++ = 'C';
@@ -154,7 +163,7 @@ static int create_empty_file(const char *directory, const char *filename)
 		*s++ = PATHSEP;
 	}
 	strcpy(s, filename);
-	h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	h = CreateFile(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	free(path);
 	if (h == INVALID_HANDLE_VALUE) {
 		return -1;
