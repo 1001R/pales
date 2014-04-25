@@ -39,7 +39,7 @@ int parse_args(options_t *opts, int argc, wchar_t **argv, int *optind)
 					if (i == argc - 1) {
 						return -1;
 					}
-					*(const wchar_t**)(((wchar_t*) opts) + optspecs[j].offset) = argv[++i];
+					*(const wchar_t**)(((char*) opts) + optspecs[j].offset) = argv[++i];
 				}
 			}
 		}
