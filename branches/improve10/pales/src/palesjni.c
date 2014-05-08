@@ -6,7 +6,6 @@
 
 #ifdef WIN32
 #include "win32.h"
-#define PATHSEP L'\\'
 #else
 #include <signal.h>
 #include "unix.h"
@@ -30,11 +29,11 @@ static int pales_exec(const wchar_t *execw, const wchar_t *procid, const wchar_t
 	cmdlineLen = 0;
 	quoteExecw = ArgumentMustBeQuoted(execw, &arglen);
 	cmdlineLen += arglen;
-	quoteExecw = ArgumentMustBeQuoted(procid, &arglen);
+	quoteProcessId = ArgumentMustBeQuoted(procid, &arglen);
 	cmdlineLen += arglen + 4;
-	quoteExecw = ArgumentMustBeQuoted(dbdir, &arglen);
+	quoteDbDir = ArgumentMustBeQuoted(dbdir, &arglen);
 	cmdlineLen += arglen + 4;
-	quoteExecw = ArgumentMustBeQuoted(workdir, &arglen);
+	quoteWorkDir = ArgumentMustBeQuoted(workdir, &arglen);
 	cmdlineLen += arglen + 4;
 	if (outfile != NULL) {
 		quoteOutFile = ArgumentMustBeQuoted(outfile, &arglen);

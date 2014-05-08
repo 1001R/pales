@@ -5,8 +5,6 @@
 
 #include <malloc.h>
 
-#define PATHSEP L'\\'
-
 __inline wchar_t *wcpcpy(wchar_t *to, const wchar_t *from)
 {
 	for (; (*to = *from); ++from, ++to);
@@ -50,23 +48,26 @@ wchar_t *QuoteArgument(wchar_t *s, const wchar_t *arg) {
 	*s++ = L'"';
 	while (*arg != L'\0') {
 		size_t bscnt = 0;
-		while (*s == L'\\') {
+		while (*arg == L'\\') {
 			bscnt++;
-			s++;
+			arg++;
 		}
-		if (*s == L'\0') {
+		if (*arg == L'\0') {
 			for (size_t j = 0; j < 2 * bscnt; j++) {
 				*s++ = L'\\';
 			}
 			break;
 		}
-		else if (*s == L'"') {
+		else if (*arg == L'"') {
 			for (size_t j = 0; j < 2 * bscnt + 1; j++) {
 				*s++ = L'\\';
 			}
 			*s = L'"';
 		}
 		else {
+			for (size_t j = 0; j < bscnt; j++) {
+				*s++ = L'\\';
+			}
 			*s = *arg;
 		}
 		s++;
