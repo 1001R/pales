@@ -10,6 +10,7 @@
 #include "process.h"
 #include "database.h"
 
+
 int wmain(int argc, wchar_t **argv)
 {
 	int optind;

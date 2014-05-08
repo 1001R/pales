@@ -126,6 +126,9 @@ static wchar_t *build_cmdline(int argc, wchar_t **argv)
 	bool *quote;
 	wchar_t *cmdline, *s;
 
+
+	wcscspn()
+
 	quote = _alloca(sizeof(bool) * argc);
 	for (int i = 0; i < argc; i++) {
 		quote[i] = false;
