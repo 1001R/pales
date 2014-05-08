@@ -5,142 +5,13 @@
 #include <stdlib.h>
 
 #ifdef WIN32
-#include <windows.h>
-#include <malloc.h>
-
+#include "win32.h"
 #define PATHSEP L'\\'
-
-static __inline wchar_t *wcpcpy(wchar_t *to, const wchar_t *from)
-{
-	for (; (*to = *from); ++from, ++to);
-	return(to);
-}
-
 #else
 #include <signal.h>
 #include "unix.h"
 #define PATHSEP '/'
-
 #endif
-
-
-#ifdef WIN32
-
-static bool ArgumentMustBeQuoted(const wchar_t *s, size_t *len) {
-	size_t slen = 0, qlen = 2;
-	bool retval = (*s == L'\0');
-	while (*s != L'\0') {
-		size_t bscnt = 0;
-		while (*s == L'\\') {
-			bscnt++;
-			s++;
-		}
-		if (*s == L'\0') {
-			qlen += bscnt * 2;
-			slen += bscnt;
-			break;
-		}
-		else if (*s == L'"') {
-			qlen += bscnt * 2 + 2;
-			slen += bscnt + 1;
-			retval = true;
-		}
-		else {
-			qlen += bscnt + 1;
-			slen += bscnt + 1;
-		}
-
-		if (iswspace(*s)) {
-			retval = true;
-		}
-		s++;
-	}
-	*len = retval ? qlen : slen;
-	return retval;
-}
-
-static wchar_t *QuoteArgument(wchar_t *s, const wchar_t *arg) {
-	*s++ = L'"';
-	while (*arg != L'\0') {
-		size_t bscnt = 0;
-		while (*s == L'\\') {
-			bscnt++;
-			s++;
-		}
-		if (*s == L'\0') {
-			for (size_t j = 0; j < 2 * bscnt; j++) {
-				*s++ = L'\\';
-			}
-			break;
-		}
-		else if (*s == L'"') {
-			for (size_t j = 0; j < 2 * bscnt + 1; j++) {
-				*s++ = L'\\';
-			}
-			*s = L'"';
-		}
-		else {
-			*s = *arg;
-		}
-		s++;
-		arg++;
-	}
-	*s++ = L'"';
-	*s = L'\0';
-	return s;
-}
-
-wchar_t *BuildCommandLine(size_t argc, wchar_t **argv) {
-	size_t len = 0;
-	bool *quote = _alloca(sizeof(bool)* argc);
-	wchar_t *cmdline, *s;
-
-	for (size_t i = 0; i < argc; i++) {
-		size_t arglen = 0;
-		quote[i] = ArgumentMustBeQuoted(argv[i], &arglen);
-		len += arglen;
-		if (i > 0) {
-			len++;
-		}
-	}
-	len++;
-	s = cmdline = malloc(sizeof(wchar_t)* len);
-	if (cmdline == NULL) {
-		return NULL;
-	}
-
-	for (size_t i = 0; i < argc; i++) {
-		if (i > 0) {
-			*s++ = L' ';
-		}
-		if (quote[i]) {
-			QuoteArgument(s, argv[i]);
-		}
-		else {
-			s = wcpcpy(s, argv[i]);
-		}
-	}
-	return cmdline;
-}
-
-
-static wchar_t *wcpcpy_quote(wchar_t *to, const wchar_t *from) {
-	bool quote = false;
-	for (const wchar_t *s = from; *s; s++) {
-		if (iswspace(*s)) {
-			quote = true;
-			break;
-		}
-	}
-	if (quote) {
-		*to++ = L'"';
-	}
-	to = wcpcpy(to, from);
-	if (quote) {
-		*to++ = L'"';
-	}
-	return to;
-}
 
 static int pales_exec(const wchar_t *execw, const wchar_t *procid, const wchar_t *dbdir, const wchar_t *workdir, const wchar_t *outfile, const wchar_t *errfile, const wchar_t *executable, wchar_t **argv) {
 	wchar_t *cmdline, *s;
@@ -225,11 +96,6 @@ static int pales_exec(const wchar_t *execw, const wchar_t *procid, const wchar_t
 	free(cmdline);
 	return rv ? 0 : -1;
 }
-#else
-
-#include "unix.h"
-
-#endif
 
 JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
