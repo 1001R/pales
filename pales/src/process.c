@@ -5,7 +5,11 @@
 #include <ctype.h>
 #include <string.h>
 #include <windows.h>
-#include <wincrypt.h>
+//#include <wincrypt.h>
+/*
+#include <io.h>
+#include <fcntl.h>
+*/
 
 #define FREE_IF_NOT_NULL(x) if ((x) != NULL) { free((void*) (x)); }
 
