@@ -1,4 +1,5 @@
 #include "process.h"
+#include "win32.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -120,6 +121,7 @@ int create_completion_port(process_t *proc)
 }
 */
 
+/*
 static wchar_t *build_cmdline(int argc, wchar_t **argv)
 {
 	int len = 1;
@@ -169,6 +171,7 @@ static wchar_t *build_cmdline(int argc, wchar_t **argv)
 	*s = L'\0';
 	return cmdline;
 }
+*/
 
 /*
 static int create_id(uint64_t *id)
@@ -302,7 +305,7 @@ int process_launch(const launch_request_t *request, int argc, wchar_t **argv, pr
 		goto cleanup;
 	}
 
-	cmdline = build_cmdline(argc, argv);
+	cmdline = BuildCommandLine(argc, argv);
 	if (cmdline == NULL) {
 		goto cleanup;
 	}
