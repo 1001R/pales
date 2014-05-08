@@ -6,10 +6,11 @@
 
 #ifdef WIN32
 #include <windows.h>
+#include <malloc.h>
 
-#define PATHSEP '\\'
+#define PATHSEP L'\\'
 
-static char *stpcpy(char *restrict to, const char *restrict from)
+static __inline wchar_t *wcpcpy(wchar_t *to, const wchar_t *from)
 {
 	for (; (*to = *from); ++from, ++to);
 	return(to);
@@ -24,65 +25,186 @@ static char *stpcpy(char *restrict to, const char *restrict from)
 
 
 #ifdef WIN32
-static char *stpcpy_quote(char *to, const char *from) {
+
+static bool ArgumentMustBeQuoted(const wchar_t *s, size_t *len) {
+	size_t slen = 0, qlen = 2;
+	bool retval = (*s == L'\0');
+	while (*s != L'\0') {
+		size_t bscnt = 0;
+		while (*s == L'\\') {
+			bscnt++;
+			s++;
+		}
+		if (*s == L'\0') {
+			qlen += bscnt * 2;
+			slen += bscnt;
+			break;
+		}
+		else if (*s == L'"') {
+			qlen += bscnt * 2 + 2;
+			slen += bscnt + 1;
+			retval = true;
+		}
+		else {
+			qlen += bscnt + 1;
+			slen += bscnt + 1;
+		}
+
+		if (iswspace(*s)) {
+			retval = true;
+		}
+		s++;
+	}
+	*len = retval ? qlen : slen;
+	return retval;
+}
+
+static wchar_t *QuoteArgument(wchar_t *s, const wchar_t *arg) {
+	*s++ = L'"';
+	while (*arg != L'\0') {
+		size_t bscnt = 0;
+		while (*s == L'\\') {
+			bscnt++;
+			s++;
+		}
+		if (*s == L'\0') {
+			for (size_t j = 0; j < 2 * bscnt; j++) {
+				*s++ = L'\\';
+			}
+			break;
+		}
+		else if (*s == L'"') {
+			for (size_t j = 0; j < 2 * bscnt + 1; j++) {
+				*s++ = L'\\';
+			}
+			*s = L'"';
+		}
+		else {
+			*s = *arg;
+		}
+		s++;
+		arg++;
+	}
+	*s++ = L'"';
+	*s = L'\0';
+	return s;
+}
+
+wchar_t *BuildCommandLine(size_t argc, wchar_t **argv) {
+	size_t len = 0;
+	bool *quote = _alloca(sizeof(bool)* argc);
+	wchar_t *cmdline, *s;
+
+	for (size_t i = 0; i < argc; i++) {
+		size_t arglen = 0;
+		quote[i] = ArgumentMustBeQuoted(argv[i], &arglen);
+		len += arglen;
+		if (i > 0) {
+			len++;
+		}
+	}
+	len++;
+	s = cmdline = malloc(sizeof(wchar_t)* len);
+	if (cmdline == NULL) {
+		return NULL;
+	}
+
+	for (size_t i = 0; i < argc; i++) {
+		if (i > 0) {
+			*s++ = L' ';
+		}
+		if (quote[i]) {
+			QuoteArgument(s, argv[i]);
+		}
+		else {
+			s = wcpcpy(s, argv[i]);
+		}
+	}
+	return cmdline;
+}
+
+
+static wchar_t *wcpcpy_quote(wchar_t *to, const wchar_t *from) {
 	bool quote = false;
-	for (const char *s = from; *s; s++) {
-		if (isspace(*s)) {
+	for (const wchar_t *s = from; *s; s++) {
+		if (iswspace(*s)) {
 			quote = true;
 			break;
 		}
 	}
 	if (quote) {
-		*to++ = '"';
+		*to++ = L'"';
 	}
-	to = stpcpy(to, from);
+	to = wcpcpy(to, from);
 	if (quote) {
-		*to++ = '"';
+		*to++ = L'"';
 	}
 	return to;
 }
 
-static int pales_exec(const char *execw, const char *procid, const char *dbdir, const char *workdir, const char *outfile, const char *errfile, const char *executable, char **argv) {
-	char *cmdline, *s;
-	int len, rv;
+static int pales_exec(const wchar_t *execw, const wchar_t *procid, const wchar_t *dbdir, const wchar_t *workdir, const wchar_t *outfile, const wchar_t *errfile, const wchar_t *executable, wchar_t **argv) {
+	wchar_t *cmdline, *s;
+	size_t cmdlineLen, arglen, argc;
+	int rv;
 	STARTUPINFO sinfo;
 	PROCESS_INFORMATION pinfo;
-
-	len = 21 + strlen(execw) + strlen(procid) + strlen(dbdir) + strlen(workdir) + strlen(executable);
+	bool quoteExecw = false, quoteProcessId = false, quoteDbDir = false, quoteWorkDir = false, quoteExecutable = false, quoteOutFile = false, quoteErrFile = false;
+	bool *quoteArgument;
+	
+	argc = 0;
+	while (argv[argc] != NULL) {
+		argc++;
+	}
+	quoteArgument = _alloca(sizeof(bool)* argc);
+	cmdlineLen = 0;
+	quoteExecw = ArgumentMustBeQuoted(execw, &arglen);
+	cmdlineLen += arglen;
+	quoteExecw = ArgumentMustBeQuoted(procid, &arglen);
+	cmdlineLen += arglen + 4;
+	quoteExecw = ArgumentMustBeQuoted(dbdir, &arglen);
+	cmdlineLen += arglen + 4;
+	quoteExecw = ArgumentMustBeQuoted(workdir, &arglen);
+	cmdlineLen += arglen + 4;
 	if (outfile != NULL) {
-		len += strlen(outfile) + 6;
+		quoteOutFile = ArgumentMustBeQuoted(outfile, &arglen);
+		cmdlineLen += arglen + 4;
 	}
 	if (errfile != NULL) {
-		len += strlen(errfile) + 6;
+		quoteErrFile = ArgumentMustBeQuoted(errfile, &arglen);
+		cmdlineLen += arglen + 4;
 	}
-	for (char **arg = argv; *arg != NULL; arg++) {
-		len += strlen(*arg) + 3;
+	quoteExecw = ArgumentMustBeQuoted(executable, &arglen);
+	cmdlineLen += arglen + 1;
+
+	for (size_t i = 0; i < argc; i++) {
+		quoteArgument[i] = ArgumentMustBeQuoted(argv[i], &arglen);
+		cmdlineLen += arglen + 1;
 	}
-	if ((s = cmdline = malloc(len + 1)) == NULL) {
+	if ((s = cmdline = malloc(sizeof(wchar_t) * (cmdlineLen + 1))) == NULL) {
 		return -1;
 	}
-	s = stpcpy_quote(s, execw);
-	s = stpcpy(s, " -i ");
-	s = stpcpy(s, procid);
-	s = stpcpy(s, " -d ");
-	s = stpcpy_quote(s, dbdir);
-	s = stpcpy(s, " -w ");
-	s = stpcpy_quote(s, workdir);
+	s = quoteExecw ? QuoteArgument(s, execw) : wcpcpy(s, execw);
+	s = wcpcpy(s, L" -i ");
+	s = quoteProcessId ? QuoteArgument(s, procid) : wcpcpy(s, procid);
+	s = wcpcpy(s, L" -d ");
+	s = quoteDbDir ? QuoteArgument(s, dbdir) : wcpcpy(s, dbdir);
+	s = wcpcpy(s, L" -w ");
+	s = quoteWorkDir ? QuoteArgument(s, workdir) : wcpcpy(s, workdir);
 	if (outfile != NULL) {
-		s = stpcpy(s, " -o ");
-		s = stpcpy_quote(s, outfile);
+		s = wcpcpy(s, L" -o ");
+		s = quoteOutFile ? QuoteArgument(s, outfile) : wcpcpy(s, outfile);
 	}
 	if (errfile != NULL) {
-		s = stpcpy(s, " -e ");
-		s = stpcpy_quote(s, errfile);
+		s = wcpcpy(s, L" -e ");
+		s = quoteErrFile ? QuoteArgument(s, errfile) : wcpcpy(s, errfile);
 	}
-	*s++ = ' ';
-	s = stpcpy_quote(s, executable);
-	for (char **arg = argv; *arg != NULL; arg++) {
-		*s++ = ' ';
-		s = stpcpy_quote(s, *arg);
+	*s++ = L' ';
+	s = quoteExecutable ? QuoteArgument(s, executable) : wcpcpy(s, executable);
+	for (size_t i = 0; i < argc; i++) {
+		*s++ = L' ';
+		s = quoteArgument[i] ? QuoteArgument(s, argv[i]) : wcpcpy(s, argv[i]);
 	}
-	*s = '\0';
+	
 	memset(&sinfo, 0, sizeof(sinfo));
     sinfo.cb = sizeof(sinfo);
     memset(&pinfo, 0, sizeof(pinfo));
@@ -109,32 +231,32 @@ static int pales_exec(const char *execw, const char *procid, const char *dbdir, 
 
 #endif
 
-JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
+JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
 {
-	const char *c_procid, *c_palesdir, *c_workdir, *c_outfile = NULL, *c_errfile = NULL, *c_executable;
-	char *dbdir = NULL, *s;
+	const wchar_t *c_procid = NULL, *c_palesdir = NULL, *c_workdir = NULL, *c_outfile = NULL, *c_errfile = NULL, *c_executable = NULL;
+	wchar_t *dbdir = NULL, *s;
 #	ifdef WIN32
-	const char *c_execw = NULL;
+	const wchar_t *c_execw = NULL;
 #	endif
-	char **c_argv = NULL;
+	wchar_t **c_argv = NULL;
 	jlong result = -1;
 	int n, i, j;
 
-	c_procid = (*env)->GetStringUTFChars(env, procid, NULL);
-	c_palesdir = (*env)->GetStringUTFChars(env, palesdir, NULL);
-	c_workdir = (*env)->GetStringUTFChars(env, workdir, NULL);
-	c_executable = (*env)->GetStringUTFChars(env, executable, NULL);
+	c_procid = (*env)->GetStringChars(env, procid, NULL);
+	c_palesdir = (*env)->GetStringChars(env, palesdir, NULL);
+	c_workdir = (*env)->GetStringChars(env, workdir, NULL);
+	c_executable = (*env)->GetStringChars(env, executable, NULL);
 #	ifdef WIN32
-	c_execw = (*env)->GetStringUTFChars(env, execwPath, NULL);
+	c_execw = (*env)->GetStringChars(env, execwPath, NULL);
 #	endif
 	if (outfile != NULL) {
-		c_outfile = (*env)->GetStringUTFChars(env, outfile, NULL);
+		c_outfile = (*env)->GetStringChars(env, outfile, NULL);
 	}
 	if (errfile != NULL) {
-		c_errfile = (*env)->GetStringUTFChars(env, errfile, NULL);
+		c_errfile = (*env)->GetStringChars(env, errfile, NULL);
 	}
-	if ((dbdir = malloc(strlen(c_palesdir) + 4)) == NULL) {
+	if ((dbdir = malloc(sizeof(wchar_t) * (wcslen(c_palesdir) + 4))) == NULL) {
 		goto cleanup;
 	}
 	i = j = 0;
@@ -151,19 +273,23 @@ JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *
 #	endif
 	for ( ; i < n - 1; i++) {
 		jstring str = (*env)->GetObjectArrayElement(env, argv, j++);
+		const wchar_t *s;
 		if (str == NULL) {
 			goto cleanup;
 		}
-		const char *s = (*env)->GetStringUTFChars(env, str, NULL);
-		c_argv[i] = strdup(s);
-		(*env)->ReleaseStringUTFChars(env, str, s);
+		s = (*env)->GetStringChars(env, str, NULL);
+		if (s == NULL) {
+			goto cleanup;
+		}
+		c_argv[i] = _wcsdup(s);
+		(*env)->ReleaseStringChars(env, str, s);
 		if (c_argv[i] == NULL) {
 			goto cleanup;
 		}
 	}
-	s = stpcpy(dbdir, c_palesdir);
+	s = wcpcpy(dbdir, c_palesdir);
 	*s++ = PATHSEP;
-	s = stpcpy(s, "db");
+	s = wcpcpy(s, L"db");
 
 #	ifdef WIN32
 	result = pales_exec(c_execw, c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
@@ -172,7 +298,7 @@ JNIEXPORT jlong JNICALL PREFIX(Java_net_sf_pales_ProcessManager_launch)(JNIEnv *
 #	endif
 cleanup:
 	if (c_argv != NULL) {
-		for (char **arg = c_argv; *arg != NULL; arg++) {
+		for (wchar_t **arg = c_argv; *arg != NULL; arg++) {
 			free(*arg);
 		}
 		free(c_argv);
@@ -181,16 +307,26 @@ cleanup:
 		free(dbdir);
 	}
 	if (c_errfile != NULL) {
-		(*env)->ReleaseStringUTFChars(env, errfile, c_errfile);
+		(*env)->ReleaseStringChars(env, errfile, c_errfile);
 	}
 	if (c_outfile != NULL) {
-		(*env)->ReleaseStringUTFChars(env, outfile, c_outfile);
+		(*env)->ReleaseStringChars(env, outfile, c_outfile);
 	}
-	(*env)->ReleaseStringUTFChars(env, executable, c_executable);
-	(*env)->ReleaseStringUTFChars(env, workdir, c_workdir);
-	(*env)->ReleaseStringUTFChars(env, palesdir, c_palesdir);
-	(*env)->ReleaseStringUTFChars(env, procid, c_procid);
-	(*env)->ReleaseStringUTFChars(env, execwPath, c_execw);
+	if (c_executable != NULL) {
+		(*env)->ReleaseStringChars(env, executable, c_executable);
+	}
+	if (c_workdir != NULL) {
+		(*env)->ReleaseStringChars(env, workdir, c_workdir);
+	}
+	if (c_palesdir != NULL) {
+		(*env)->ReleaseStringChars(env, palesdir, c_palesdir);
+	}
+	if (c_procid != NULL) {
+		(*env)->ReleaseStringChars(env, procid, c_procid);
+	}
+	if (c_execw != NULL) {
+		(*env)->ReleaseStringChars(env, execwPath, c_execw);
+	}
 
 	if (result == -1) {
 		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
@@ -202,15 +338,15 @@ cleanup:
 	return result;
 }
 
-JNIEXPORT void JNICALL PREFIX(Java_net_sf_pales_OS_cancelProcess)(JNIEnv *env, jclass class, jstring process_id, jlong pid)
+JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id, jlong pid)
 {
 	bool success = false;
 #	ifdef WIN32
 	HANDLE event;
 
-	const char *ename = (*env)->GetStringUTFChars(env, process_id, NULL);
+	const wchar_t *ename = (*env)->GetStringChars(env, process_id, NULL);
 	event = CreateEvent(NULL, FALSE, FALSE, ename);
-	(*env)->ReleaseStringUTFChars(env, process_id, ename);
+	(*env)->ReleaseStringChars(env, process_id, ename);
 	success = event != NULL && SetEvent(event);
 #	else
 	success = kill(pid, SIGTERM) == 0;
