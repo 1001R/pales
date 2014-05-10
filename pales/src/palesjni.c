@@ -7,6 +7,8 @@
 #ifdef WIN32
 #include "win32.h"
 #else
+#include <fcntl.h>
+#include <semaphore.h>
 #include <signal.h>
 #include "unix.h"
 #define PATHSEP '/'
@@ -208,13 +210,19 @@ JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass cl
 	bool success = false;
 #	ifdef WIN32
 	HANDLE event;
-
 	const wchar_t *ename = (*env)->GetStringChars(env, process_id, NULL);
+	
 	event = CreateEvent(NULL, FALSE, FALSE, ename);
 	(*env)->ReleaseStringChars(env, process_id, ename);
 	success = event != NULL && SetEvent(event);
 #	else
-	success = kill(pid, SIGTERM) == 0;
+	const char *semaphoreName = (*env)->GetStringUTFChars(env, palesProcessId, NULL);
+	sem_t *semaphore = sem_open(semaphoreName, 0);
+	if (semaphore != SEM_FAILED) {
+		success = sem_post(semaphore) == 0;
+		sem_close(semaphore);
+	}
+	(*env)->ReleaseStringUTFChars(env, palesProcessId, semaphoreName);
 #	endif
 	if (!success) {
 		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
@@ -223,4 +231,36 @@ JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass cl
 		}
 		(*env)->ThrowNew(env, rte, "Can't cancel process");
 	}
+}
+
+JNIEXPORT jboolean JNICALL Java_net_sf_pales_OS_isProcessRunning(JNIEnv *env, jclass javaClass, jstring palesProcessId)
+{
+	bool isRunning = false;
+	const wchar_t *ipcObjectName;
+#	ifdef WIN32
+	const wchar_t *eventName;
+	HANDLE eventHandle;
+#   else
+	const char *semaphoreName;
+	sem_t *semaphore = NULL;
+#   endif
+	
+#	ifdef WIN32
+	eventName = (*env)->GetStringChars(env, palesProcessId, NULL);
+	eventHandle = OpenEvent(EVENT_MODIFY_STATE, FALSE, eventName);
+	if (eventHandle != NULL) {
+		isRunning = true;
+		CloseHandle(eventHandle);
+	}
+	(*env)->ReleaseStringChars(env, palesProcessId, eventName);
+#	else
+	semaphoreName = (*env)->GetStringUTFChars(env, palesProcessId, NULL);
+	semaphore = sem_open(semaphoreName, 0);
+	if (semaphore != SEM_FAILED) {
+		isRunning = true;
+		sem_close(semaphore);
+	}
+	(*env)->ReleaseStringUTFChars(env, palesProcessId, semaphoreName);
+#	endif
+	return isRunning;
 }
