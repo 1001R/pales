@@ -45,7 +45,7 @@ static int pales_exec(const wchar_t *execw, const wchar_t *procid, const wchar_t
 		quoteErrFile = ArgumentMustBeQuoted(errfile, &arglen);
 		cmdlineLen += arglen + 4;
 	}
-	quoteExecw = ArgumentMustBeQuoted(executable, &arglen);
+	quoteExecutable = ArgumentMustBeQuoted(executable, &arglen);
 	cmdlineLen += arglen + 1;
 
 	for (size_t i = 0; i < argc; i++) {
