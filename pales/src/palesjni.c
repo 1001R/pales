@@ -236,7 +236,6 @@ JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass cl
 JNIEXPORT jboolean JNICALL Java_net_sf_pales_OS_isProcessRunning(JNIEnv *env, jclass javaClass, jstring palesProcessId)
 {
 	bool isRunning = false;
-	const wchar_t *ipcObjectName;
 #	ifdef WIN32
 	const wchar_t *eventName;
 	HANDLE eventHandle;
