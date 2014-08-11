@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.nio.channels.ByteChannel;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -20,12 +19,13 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -42,6 +42,7 @@ public class ProcessManager {
 	
 	private static final String DATA_PREFIX = "1";
 	private static final String STATUS_PREFIX = "0";
+	private static final long GRACE_PERIOD = 60000L;
 	
 	private final PalesConfiguration configuration;
 	private TreeMap<ImmutablePair<Long, ProcessHandle>, PalesNotification> notifications = new TreeMap<>();
@@ -170,7 +171,7 @@ public class ProcessManager {
 	}
 	
 	private void updateProcessRecord(ProcessRecord record, ProcessFile file) {
-		if (file.getProcessStatus().ordinal() > record.getStatus().ordinal()) {						
+		if (record.getStatus() == null || file.getProcessStatus().ordinal() > record.getStatus().ordinal()) {						
 			record.setStatus(file.getProcessStatus());
 			record.setLastMod(file.getLastModifiedTime());
 			if (!record.isStale()) {							
@@ -272,7 +273,8 @@ public class ProcessManager {
 	}
 	
 	private void startup() {
-		List<Path> filePaths = new ArrayList<>();
+		final long currentTime = System.currentTimeMillis();
+		Set<Path> filePaths = new TreeSet<>();
 		try (DirectoryStream<Path> stream = Files.newDirectoryStream(configuration.getDatabaseDirectory())) {
 			for (Path p : stream) {
 				filePaths.add(p);
@@ -281,9 +283,7 @@ public class ProcessManager {
 		catch (IOException e) {
 			throw new RuntimeException("Cannot traverse database directory " + configuration.getDatabaseDirectory(), e);
 		}
-		Collections.sort(filePaths);
 		for (Path p : filePaths) {
-			
 			ProcessFile processFile = null;
 			try {
 				processFile = new ProcessFile(p);
@@ -297,7 +297,20 @@ public class ProcessManager {
 				continue;
 			}
 			
-			if (!processFile.isData()) {
+			if (processFile.isData()) {
+				String dataFileName = p.getFileName().toString();
+				String statusFileName = STATUS_PREFIX + dataFileName.substring(1);
+				Path statusFilePath = p.getParent().resolve(statusFileName);
+				if (!filePaths.contains(statusFilePath) && (currentTime - processFile.getLastModifiedTime()) > GRACE_PERIOD) {
+					PalesLogger.SINGLETON.getLogger().log(Level.INFO, "Deleting data file from incomplete transaction", p);
+					tryDeleteFile(p);
+					continue;
+				}
+				ProcessRecord record = processRecords.get(processFile.getProcessId());
+				if (record.getStatus() == processFile.getProcessStatus()) {
+					record.setData(readData(p, record.getStatus()));
+				}
+			} else {
 					ProcessRecord record = new ProcessRecord(processFile.getProcessId());
 					record.setStatus(processFile.getProcessStatus());
 					record.setLastMod(processFile.getLastModifiedTime());
@@ -305,19 +318,13 @@ public class ProcessManager {
 					if (oldRecord == null || oldRecord.getStatus().compareTo(record.getStatus()) < 0) {
 						processRecords.put(processFile.getProcessId(), record);
 					}
-			} else {
-				ProcessRecord record = processRecords.get(processFile.getProcessId());
-				if (record != null && record.getStatus() == processFile.getProcessStatus()) {
-					record.setData(readData(p, record.getStatus()));
-				}
 			}
 		}
 		
-		long currentTime = System.currentTimeMillis();
 		for (ProcessRecord record_ : processRecords.values()) {
 			final ProcessRecord record = record_;
 			if (record.getStatus() == ProcessStatus.REQUESTED) {
-				long delay = 60000L - currentTime + record.getLastMod();
+				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
 				if (delay < 0) {
 					doLaunch((PalesLaunchRequest) record.getData());
 				} else {
@@ -340,6 +347,11 @@ public class ProcessManager {
 				}
 			}
 		}
+		
+		// debug only
+		for (ProcessRecord record : processRecords.values()) {
+			System.out.println(record);
+		}
 	}
 	
 	private boolean hasTerminated(String processId) {
@@ -359,7 +371,7 @@ public class ProcessManager {
 		String encodedId = encodePalesId(request.getId());
 		Path requestFilePath = configuration.getDatabaseDirectory().resolve(DATA_PREFIX + encodedId + '.' + ProcessStatus.REQUESTED.getAbbreviation());
 		
-		try (FileChannel requestFileChannel = (FileChannel) Files.newByteChannel(requestFilePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+		try (FileChannel requestFileChannel = FileChannel.open(requestFilePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
 				ObjectOutputStream oos = new ObjectOutputStream(Channels.newOutputStream(requestFileChannel))) {
 			oos.writeObject(request);
 			requestFileChannel.force(true);
@@ -376,9 +388,9 @@ public class ProcessManager {
 	}
 	
 	private static void createEmptyFile(Path filePath) throws IOException {
-		FileChannel fileChannel = (FileChannel) Files.newByteChannel(filePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-		fileChannel.force(true);
-		fileChannel.close();
+		try (FileChannel fileChannel = FileChannel.open(filePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+			fileChannel.force(true);
+		}
 	}
 	
 	private ProcessHandle doLaunch(PalesLaunchRequest request) {
