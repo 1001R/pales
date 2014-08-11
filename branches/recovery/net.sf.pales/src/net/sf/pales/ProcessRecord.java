@@ -85,6 +85,7 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 	@Override
 	public String toString() {
 		ToStringBuilder stringBuilder = new ToStringBuilder(this)
+			.append("id", id)
 			.append("status", status);
 		switch (getStatus()) {
 		case REQUESTED:
@@ -93,8 +94,10 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 			break;
 		case FINISHED:
 			stringBuilder.append("exitCode", exitCode);
+			break;
 		case ERROR:
 			stringBuilder.append("message", getData());
+			break;
 		}
 		return stringBuilder.toString();
 	}

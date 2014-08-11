@@ -80,6 +80,7 @@ public class ProcessManagerTest {
 	@Test
 	public void test() throws Exception {
 		start();
+		/*
 		PalesLaunchRequest request = new PalesLaunchRequest();
 		request.setId("6BD91756-C81A-47AF-8F01-62004E0E8352");
 		request.setExecutable(Paths.get("C:/Windows/notepad.exe"));
@@ -87,6 +88,7 @@ public class ProcessManagerTest {
 		request.setStdoutFile(STDOUT_FILE_PATH);
 		request.setWorkingDirectory(WORKING_DIRECTORY_PATH);
 		processManager.launch(request);
+		*/
 //		t.startNotificationProcessing();
 		processPendingUpdates(true);
 		fail("Not yet implemented");
