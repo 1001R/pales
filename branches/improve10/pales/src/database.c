@@ -34,24 +34,26 @@ int db_close(database_t *db)
 
 static wchar_t *process_encode(database_t *db, process_t *proc)
 {
-	wchar_t pid[32], exitcode[32];
 	wchar_t *filename, *s;
 	size_t len;
 
+	/*
 	if (proc->status == running) {
 		_snwprintf(pid, sizeof(pid) / sizeof(wchar_t), L"%ld", proc->pid);
 	}
 	if (proc->status == finished) {
 		_snwprintf(exitcode, sizeof(exitcode) / sizeof(wchar_t), L"%ld", proc->exitcode);
 	}
-	
-	len = wcslen(db->path) + 1 + wcslen(proc->id) + 3;
+	*/
+	len = wcslen(db->path) + 2 + wcslen(proc->id) + 3;
+	/*
 	if (proc->status == running) {
 		len += wcslen(pid) + 1;
 	}
 	if (proc->status == finished) {
 		len += wcslen(exitcode) + 1;
 	}
+	*/
 	filename = (wchar_t *)malloc(len * sizeof(wchar_t));
 	if (filename == NULL) {
 		return NULL;
@@ -60,21 +62,16 @@ static wchar_t *process_encode(database_t *db, process_t *proc)
 	wcscpy(s, db->path);
 	s += wcslen(db->path);
 	*s++ = PATHSEP;
+	*s++ = L'0';
 	wcscpy(s, proc->id);
 	s += wcslen(proc->id);
-	*s++ = SEPARATOR;
+	*s++ = L'.';
 	switch (proc->status) {
 	case running:
 		*s++ = L'R';
-		*s++ = SEPARATOR;
-		wcscpy(s, pid);
-		s += wcslen(pid);
 		break;
 	case finished:
 		*s++ = L'F';
-		*s++ = SEPARATOR;
-		wcscpy(s, exitcode);
-		s += wcslen(exitcode);
 		break;
 	case cancelled:
 		*s++ = L'C';
@@ -140,11 +137,12 @@ static char *path_join(const char *directory, const char *filename)
 }
 */
 
-static int create_empty_file(const wchar_t *directory, const wchar_t *filename)
+static int create_empty_file(const wchar_t *filepath)
 {
+	HANDLE h;
+	/*
 	wchar_t *path, *s;
 	size_t len = 0;
-	HANDLE h;
 	bool addpathsep = false;
 
 	len = wcslen(directory);
@@ -163,25 +161,58 @@ static int create_empty_file(const wchar_t *directory, const wchar_t *filename)
 		*s++ = PATHSEP;
 	}
 	wcscpy(s, filename);
-	h = CreateFile(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-	free(path);
+	*/
+	h = CreateFile(filepath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
 		return -1;
 	}
+	FlushFileBuffers(h);
 	CloseHandle(h);
 	return 0;
+}
+
+static int write_int_to_file(const wchar_t *filepath, DWORD pid)
+{
+	int retval = -1;
+	HANDLE fileHandle;
+	char buf[16];
+	DWORD len, writeCount;
+
+	len = _snprintf(buf, sizeof(buf), "%ld", pid);
+	if (len < 0 || (len == sizeof(buf) && buf[len - 1] != '\0')) {
+		return -1;
+	}
+	fileHandle = CreateFile(filepath, FILE_GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (fileHandle == INVALID_HANDLE_VALUE) {
+		return -1;
+	}
+	if (WriteFile(fileHandle, buf, len, &writeCount, NULL)) {
+		retval = 0;
+	}
+	FlushFileBuffers(fileHandle);
+	CloseHandle(fileHandle);
+	return retval;
 }
 
 int db_update(database_t *db, process_t *proc)
 {
 	int rv;
 	wchar_t *path = process_encode(db, proc);
+
 	wchar_t *sep = wcsrchr(path, PATHSEP);
 
-	*sep = L'\0';
-	rv = create_empty_file(path, sep + 1);
+	if (proc->status == running) {
+		sep[1] = L'1';
+		write_int_to_file(path, proc->pid);
+		sep[1] = L'0';
+	}
+	else if (proc->status == finished) {
+		sep[1] = L'1';
+		write_int_to_file(path, proc->exitcode);
+		sep[1] = L'0';
+	}
+
+	rv = create_empty_file(path);
 	free(path);
 	return rv;
 }
-
-
