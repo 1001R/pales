@@ -4,7 +4,8 @@ Bundle-Name: Pales Process Manager
 Bundle-SymbolicName: net.sf.pales
 Bundle-Version: 0.2.2
 Bundle-Activator: net.sf.pales.Activator
-Require-Bundle: org.eclipse.core.runtime
+Require-Bundle: org.eclipse.core.runtime,
+ org.junit
 Bundle-ActivationPolicy: lazy
 Bundle-RequiredExecutionEnvironment: JavaSE-1.7
 Bundle-NativeCode: jni/pales.dll; processor="x86"; osname="win32", jni/libpales.so; processor=x86; osname=linux
