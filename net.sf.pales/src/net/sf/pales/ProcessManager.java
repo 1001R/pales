@@ -3,7 +3,6 @@ package net.sf.pales;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +11,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
@@ -154,6 +152,9 @@ public class ProcessManager {
 		while (true) {
 			try {
 				ProcessFile file = filesToProcess.take();
+				if (file.getProcessStatus() == ProcessStatus.FINAL || file.getProcessStatus() == ProcessStatus.DELETING) {
+					continue;
+				}
 				ProcessRecord record = processRecords.get(file.getProcessId());
 				if (record == null) {
 					record = new ProcessRecord(file.getProcessId());
@@ -323,7 +324,11 @@ public class ProcessManager {
 		
 		for (ProcessRecord record_ : processRecords.values()) {
 			final ProcessRecord record = record_;
-			if (record.getStatus() == ProcessStatus.REQUESTED) {
+			if (record.getStatus() == ProcessStatus.DELETING) {
+				processRecords.remove(record.getId());
+				removeProcessFromDatabase(record.getId());
+			}
+			else if (record.getStatus() == ProcessStatus.REQUESTED) {
 				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
 				if (delay < 0) {
 					doLaunch((PalesLaunchRequest) record.getData());
@@ -419,8 +424,7 @@ public class ProcessManager {
 	}
 	
 	public void cancelProcess(String palesId) {
-		long pid = processIdToPid.get(palesId);
-		OS.cancelProcess(palesId, pid);
+		OS.cancelProcess(encodePalesId(palesId));
 	}
 	
 	public void addListener(PalesListener listener) {
@@ -529,7 +533,7 @@ public class ProcessManager {
 		return false;
 	}
 	
-	public void removeProcess(String processId) {
+	public void removeProcess(String processId) throws IOException {
 		ProcessRecord record = processRecords.get(processId);
 		if (record == null) {
 			return;
@@ -538,52 +542,38 @@ public class ProcessManager {
 			if (!record.getStatus().isFinal()) {
 				return;
 			}
+			processRecords.remove(processId);
 		}
-		processRecords.remove(processId);
+		Path statusFilePath = configuration.getDatabaseDirectory().resolve(STATUS_PREFIX + encodePalesId(record.getId()) + '.' + ProcessStatus.DELETING.getAbbreviation());
+		createEmptyFile(statusFilePath);
+		removeProcessFromDatabase(processId);
+	}
+	
+	private void removeProcessFromDatabase(String processId) {
+		Path statusFilePath = null;
 		try (DirectoryStream<Path> stream = Files.newDirectoryStream(configuration.getDatabaseDirectory())) {
 			for (Path p : stream) {
 				ProcessFile processFile = null;
 				try {
 					processFile = new ProcessFile(p);
 					if (processFile.getProcessId().equals(processId)) {
-						tryDeleteFile(p);
+						if (processFile.getProcessStatus() != ProcessStatus.DELETING) {
+							Files.delete(p);
+						} else {
+							statusFilePath = p;
+						}
+						
 					}
 				} catch (Throwable t) {
 					continue;
 				}
 			}
+			if (statusFilePath != null) {
+				Files.delete(statusFilePath);
+			}
 		}
 		catch (IOException e) {
-			throw new RuntimeException("Cannot traverse database directory " + configuration.getDatabaseDirectory(), e);
-		}
-	}
-	
-	public static class Foo implements Serializable {
-		private int id;
-		
-		public Foo(int id) {
-			this.id = id;
-		}
-		
-		public int getId() {
-			return id;
-		}
-		
-		public void setId(int id) {
-			this.id = id;
-		}
-	}
-	
-	public static void main(String[] args) {
-		Path requestFilePath = Paths.get("C:/temp/test.ser");
-		Foo f = new Foo(42);
-		try (FileChannel requestFileChannel = (FileChannel) Files.newByteChannel(requestFilePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-				ObjectOutputStream oos = new ObjectOutputStream(Channels.newOutputStream(requestFileChannel))) {
-			oos.writeObject(f);
-			requestFileChannel.close();
-			requestFileChannel.force(true);
-		} catch (IOException e) {
-			throw new RuntimeException("Cannot save request to file " + requestFilePath, e);
+			throw new RuntimeException("Cannot delete process " + processId + " from database", e);
 		}
 	}
 }

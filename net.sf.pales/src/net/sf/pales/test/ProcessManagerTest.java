@@ -5,6 +5,9 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -75,21 +78,43 @@ public class ProcessManagerTest {
 
 	public void primProcessNotification(ProcessRecord updatedProcessRecord) throws Throwable {
 		System.out.println("Update: " + updatedProcessRecord);
+		if (updatedProcessRecord.getStatus().isFinal()) {
+			System.out.println("Processing of process " + updatedProcessRecord.getId() + " is finished. Deleting it from database...");
+			processManager.removeProcess(updatedProcessRecord.getId());
+		}
 	}
 
 	@Test
 	public void test() throws Exception {
 		start();
+
 		/*
-		PalesLaunchRequest request = new PalesLaunchRequest();
-		request.setId("6BD91756-C81A-47AF-8F01-62004E0E8352");
-		request.setExecutable(Paths.get("C:/Windows/notepad.exe"));
-		request.setStderrFile(STDERR_FILE_PATH);
-		request.setStdoutFile(STDOUT_FILE_PATH);
-		request.setWorkingDirectory(WORKING_DIRECTORY_PATH);
-		processManager.launch(request);
+		final PalesLaunchRequest notepadRequest = new PalesLaunchRequest();
+		notepadRequest.setId(UUID.randomUUID().toString());
+		notepadRequest.setExecutable(Paths.get("C:/Windows/notepad.exe"));
+		notepadRequest.setStderrFile(STDERR_FILE_PATH);
+		notepadRequest.setStdoutFile(STDOUT_FILE_PATH);
+		notepadRequest.setWorkingDirectory(WORKING_DIRECTORY_PATH);
+		processManager.launch(notepadRequest);
+
+		Timer t = new Timer();
+		t.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				processManager.cancelProcess(notepadRequest.getId());
+			}
+		}, 10000);
+		
 		*/
-//		t.startNotificationProcessing();
+		/*
+		final PalesLaunchRequest calcRequest = new PalesLaunchRequest();
+		calcRequest.setId(UUID.randomUUID().toString());
+		calcRequest.setExecutable(Paths.get("C:/Windows/System32/calc.exe"));
+		calcRequest.setStderrFile(STDERR_FILE_PATH);
+		calcRequest.setStdoutFile(STDOUT_FILE_PATH);
+		calcRequest.setWorkingDirectory(WORKING_DIRECTORY_PATH);
+		processManager.launch(calcRequest);
+		*/
 		processPendingUpdates(true);
 		fail("Not yet implemented");
 	}

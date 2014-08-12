@@ -66,6 +66,17 @@ public enum ProcessStatus {
 		public boolean isFinal() {
 			return true;
 		}
+	},
+	DELETING {
+		@Override
+		public char getAbbreviation() {
+			return 'D';
+		}
+		
+		@Override
+		public boolean isFinal() {
+			return false;
+		}
 	};
 
 	public abstract char getAbbreviation();
