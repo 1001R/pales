@@ -14,14 +14,12 @@
     <ClInclude Include="..\..\src\database.h" />
     <ClInclude Include="..\..\src\options.h" />
     <ClInclude Include="..\..\src\process.h" />
-    <ClInclude Include="log.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\database.c" />
     <ClCompile Include="..\..\src\launch.c" />
     <ClCompile Include="..\..\src\options.c" />
     <ClCompile Include="..\..\src\process.c" />
-    <ClCompile Include="log.c" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\win32\win32.vcxproj">

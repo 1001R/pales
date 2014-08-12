@@ -24,9 +24,6 @@
     <ClInclude Include="..\..\src\process.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="log.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\database.c">
@@ -39,9 +36,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\process.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="log.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

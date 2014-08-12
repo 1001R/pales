@@ -1,4 +1,5 @@
 #include "win32.h"
+#include "log.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -85,6 +86,9 @@ wchar_t *BuildCommandLine(size_t argc, const wchar_t **argv)
 	wchar_t *cmdline, *s;
 
 	quoteArgument = _alloca(sizeof(bool) * argc);
+	if (quoteArgument == NULL) {
+		log_message(L"Failed to allocate %d bytes from the stack", sizeof(bool) * argc);
+	}
 	for (size_t i = 0; i < argc; i++) {
 		size_t arglen;
 		quoteArgument[i] = ArgumentMustBeQuoted(argv[i], &arglen);
@@ -95,6 +99,7 @@ wchar_t *BuildCommandLine(size_t argc, const wchar_t **argv)
 	}
 	cmdline = (wchar_t *) malloc((cmdlineLen + 1) * sizeof(wchar_t));
 	if (cmdline == NULL) {
+		log_message(L"Out of memory");
 		return NULL;
 	}
 	s = cmdline;
@@ -105,4 +110,17 @@ wchar_t *BuildCommandLine(size_t argc, const wchar_t **argv)
 		s = quoteArgument[i] ? QuoteArgument(s, argv[i]) : wcpcpy(s, argv[i]);
 	}
 	return cmdline;
+}
+
+int CreateEmptyFile(const wchar_t *filepath)
+{
+	HANDLE h;
+	h = CreateFile(filepath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (h == INVALID_HANDLE_VALUE) {
+		log_message(L"Cannot create empty file: %s", filepath);
+		return -1;
+	}
+	FlushFileBuffers(h);
+	CloseHandle(h);
+	return 0;
 }
