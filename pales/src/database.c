@@ -1,9 +1,11 @@
 #include "database.h"
 #include "process.h"
+#include "log.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <windows.h>
 
 #define SEPARATOR L'-'
@@ -14,13 +16,13 @@ int db_open(database_t *db, const wchar_t *path)
 	DWORD attr;
 
 	memset(db, 0, sizeof(*db));
-	if (path == NULL) {
-		return -1;
-	}
+	assert(path != NULL);
 	if ((attr = GetFileAttributes(path)) == INVALID_FILE_ATTRIBUTES) {
+		log_message(L"Database directory does not exist: %s", path);
 		return -1;
 	}
  	if ((attr & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+		log_message(L"Database directory path does not point to a directory: %s", path);
 		return -1;
 	}
 	db->path = path;
@@ -37,25 +39,10 @@ static wchar_t *process_encode(database_t *db, process_t *proc)
 	wchar_t *filename, *s;
 	size_t len;
 
-	/*
-	if (proc->status == running) {
-		_snwprintf(pid, sizeof(pid) / sizeof(wchar_t), L"%ld", proc->pid);
-	}
-	if (proc->status == finished) {
-		_snwprintf(exitcode, sizeof(exitcode) / sizeof(wchar_t), L"%ld", proc->exitcode);
-	}
-	*/
 	len = wcslen(db->path) + 2 + wcslen(proc->id) + 3;
-	/*
-	if (proc->status == running) {
-		len += wcslen(pid) + 1;
-	}
-	if (proc->status == finished) {
-		len += wcslen(exitcode) + 1;
-	}
-	*/
 	filename = (wchar_t *)malloc(len * sizeof(wchar_t));
 	if (filename == NULL) {
+		log_message(L"Out of memory");
 		return NULL;
 	}
 	s = filename;
@@ -81,89 +68,12 @@ static wchar_t *process_encode(database_t *db, process_t *proc)
 	return filename;
 }
 
-/*
-static process_t *process_decode(database_t *db, const char *path)
-{
-	char *s;
-	process_t *proc;
-
-	if (strncmp(db->path, path, strlen(db->path)) == 0) {
-		path += strlen(db->path);
-	}
-	if (*path == PATHSEP) {
-		path++;
-	}
-	s = strchr(path, SEPARATOR);
-	if (s == NULL) {
-		return NULL;
-	}
-
-	if (process_new(path, s - path, &proc) != 0) {
-		return NULL;
-	}
-	s++;
-	switch (*s) {
-	case 'R':
-		proc->status = running;
-		break;
-	case 'F':
-		break;
-	case 'C':
-		break;
-	}
-	return proc;
-}
-
-static char *path_join(const char *directory, const char *filename)
-{
-	char *s;
-	char *result;
-	int len;
-
-	len = strlen(directory);
-	while (len >=0 && directory[len - 1] == PATHSEP) {
-		len--;
-	}
-	result = s = (char *)malloc(len + 1 + strlen(filename) + 1);
-	if (result != NULL) {
-		strncpy(s, directory, len);
-		s += len;
-		*s++ = PATHSEP;
-		strcpy(s, filename);
-		s += strlen(filename);
-		*s++ = '\0';
-	}
-	return result;
-}
-*/
-
 static int create_empty_file(const wchar_t *filepath)
 {
 	HANDLE h;
-	/*
-	wchar_t *path, *s;
-	size_t len = 0;
-	bool addpathsep = false;
-
-	len = wcslen(directory);
-	if (directory[len - 1] != PATHSEP) {
-		addpathsep = true;
-		len++;
-	}
-	len += wcslen(filename);
-	if ((path = malloc((len + 1) * sizeof(wchar_t))) == NULL) {
-		return -1;
-	}
-	s = path;
-	wcscpy(s, directory);
-	s += wcslen(directory);
-	if (addpathsep) {
-		*s++ = PATHSEP;
-	}
-	wcscpy(s, filename);
-	*/
 	h = CreateFile(filepath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
+		log_message(L"Cannot create empty file: %s", filepath);
 		return -1;
 	}
 	FlushFileBuffers(h);
@@ -180,14 +90,19 @@ static int write_int_to_file(const wchar_t *filepath, DWORD pid)
 
 	len = _snprintf(buf, sizeof(buf), "%ld", pid);
 	if (len < 0 || (len == sizeof(buf) && buf[len - 1] != '\0')) {
+		log_message(L"String representation of %d too long", pid);
 		return -1;
 	}
 	fileHandle = CreateFile(filepath, FILE_GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (fileHandle == INVALID_HANDLE_VALUE) {
+		log_message(L"Cannot create file and open it for writing: %s", filepath);
 		return -1;
 	}
 	if (WriteFile(fileHandle, buf, len, &writeCount, NULL)) {
 		retval = 0;
+	}
+	else {
+		log_message(L"Cannot write to file: %s", filepath);
 	}
 	FlushFileBuffers(fileHandle);
 	CloseHandle(fileHandle);
@@ -196,23 +111,37 @@ static int write_int_to_file(const wchar_t *filepath, DWORD pid)
 
 int db_update(database_t *db, process_t *proc)
 {
-	int rv;
+	int rv = -1;
 	wchar_t *path = process_encode(db, proc);
-
+	if (path == NULL) {
+		return -1;
+	}
 	wchar_t *sep = wcsrchr(path, PATHSEP);
-
 	if (proc->status == running) {
 		sep[1] = L'1';
-		write_int_to_file(path, proc->pid);
+		if (write_int_to_file(path, proc->pid) != 0) {
+			goto cleanup;
+		}
 		sep[1] = L'0';
 	}
 	else if (proc->status == finished) {
 		sep[1] = L'1';
-		write_int_to_file(path, proc->exitcode);
+		if (write_int_to_file(path, proc->exitcode) != 0) {
+			goto cleanup;
+		}
 		sep[1] = L'0';
 	}
-
-	rv = create_empty_file(path);
+	if (create_empty_file(path) != 0) {
+		goto cleanup;
+	}
+	if (proc->status == finished || proc->status == cancelled) {
+		path[wcslen(path) - 1] = 'X';
+		rv = create_empty_file(path);
+	}
+	else {
+		rv = 0;
+	}
+cleanup:
 	free(path);
 	return rv;
 }

@@ -205,7 +205,7 @@ cleanup:
 	return result;
 }
 
-JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id, jlong pid)
+JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id)
 {
 	bool success = false;
 #	ifdef WIN32

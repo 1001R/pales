@@ -1,9 +1,11 @@
 #include "process.h"
 #include "win32.h"
+#include "log.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <assert.h>
 #include <windows.h>
 //#include <wincrypt.h>
 /*
@@ -28,6 +30,7 @@ int process_cancel(process_t *proc)
 		proc->pid = 0;
 		return 0;
 	}
+	log_message(L"Job termination failed with error %d", GetLastError());
 	return -1;
 }
 
@@ -42,17 +45,10 @@ int GetActiveProcessCount(HANDLE job) {
 
 int process_wait(process_t *proc)
 {
-	/*
-	DWORD completionCode;
-	HANDLE completionKey, completionPortHandle;
-	LPOVERLAPPED ovl;
-	JOBOBJECT_BASIC_ACCOUNTING_INFORMATION basicAccountingInfo;
-	JOBOBJECT_ASSOCIATE_COMPLETION_PORT completionPort;
-	*/
-
 	for (int i = 0; i < 60 * 15; i++) {
 		int processCount = GetActiveProcessCount(proc->job);
 		if (processCount == -1) {
+			log_message(L"Cannot determine number of active processes associated with job");
 			return -1;
 		}
 		if (processCount == 0) {
@@ -60,6 +56,7 @@ int process_wait(process_t *proc)
 		}
 		Sleep(1000);
 	}
+	log_message(L"Process did not die after being terminated");
 	return -1;
 	/*
 	if (!QueryInformationJobObject(proc->job, JobObjectBasicAccountingInformation, &basicAccountingInfo, sizeof(basicAccountingInfo), NULL)) {
@@ -211,6 +208,7 @@ static HANDLE create_std_handle(DWORD std_handle, const wchar_t *path, io_mode_t
 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 		NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
+		log_message(L"Failed to open file for I/O redirection: %s", path);
 		return INVALID_HANDLE_VALUE;
 	}
 	SetHandleInformation(h, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
@@ -227,27 +225,34 @@ int launch_request_new(const wchar_t *id,
 {
 	*request = malloc(sizeof(**request));
 	if (*request == NULL) {
+		log_message(L"Out of memory");
 		return -1;
 	}
 	memset(*request, 0, sizeof(**request));
 	if (((*request)->id = _wcsdup(id)) == NULL) {
+		log_message(L"Out of memory");
 		launch_request_free(*request);
+		log_message(L"Out of memory");
 		return -1;
 	}
 	if (((*request)->dbpath = _wcsdup(dbpath)) == NULL) {
 		launch_request_free(*request);
+		log_message(L"Out of memory");
 		return -1;
 	}
 	if (workdir != NULL && ((*request)->workdir = _wcsdup(workdir)) == NULL) {
 		launch_request_free(*request);
+		log_message(L"Out of memory");
 		return -1;
 	}
 	if (((*request)->outpath = _wcsdup(outpath != NULL ? outpath : L"NUL")) == NULL) {
 		launch_request_free(*request);
+		log_message(L"Out of memory");
 		return -1;
 	}
 	if (((*request)->errpath = _wcsdup(errpath != NULL ? errpath : L"NUL")) == NULL) {
 		launch_request_free(*request);
+		log_message(L"Out of memory");
 		return -1;
 	}
 	return 0;
@@ -305,9 +310,8 @@ int process_launch(const launch_request_t *request, int argc, wchar_t **argv, pr
 	memset(&sinfo, 0, sizeof(sinfo));
 	memset(&pinfo, 0, sizeof(pinfo));
 
-	if (request->id == NULL || request->dbpath == NULL) {
-		goto cleanup;
-	}
+	assert(request->id != NULL);
+	assert(request->dbpath != NULL);
 
 	cmdline = BuildCommandLine(argc, argv);
 	if (cmdline == NULL) {
@@ -327,15 +331,18 @@ int process_launch(const launch_request_t *request, int argc, wchar_t **argv, pr
 
 	*process = malloc(sizeof(**process));
 	if (*process == NULL) {
+		log_message(L"Out of memory");
 		goto cleanup;
 	}
 	memset(*process, 0, sizeof(**process));
 	if (((*process)->id = _wcsdup(request->id)) == NULL) {
+		log_message(L"Out of memory");
 		goto cleanup;
 	}
 	if (!CreateProcess(argv[0], cmdline, NULL, NULL, true,
 			CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED | CREATE_BREAKAWAY_FROM_JOB,
 			NULL, request->workdir, &sinfo, &pinfo)) {
+		log_message(L"Failed to spawn process");
 		goto cleanup;
 	}
 	(*process)->pid = pinfo.dwProcessId;
@@ -347,6 +354,7 @@ int process_launch(const launch_request_t *request, int argc, wchar_t **argv, pr
 			!SetInformationJobObject((*process)->job, JobObjectExtendedLimitInformation, &limit, sizeof(limit)) ||
 			!AssignProcessToJobObject((*process)->job, pinfo.hProcess) ||
 			!ResumeThread(pinfo.hThread)) {
+		log_message(L"Failed to create job and process to it");
 		goto cleanup;
 	}
 	retval = 0;
