@@ -33,10 +33,9 @@ public class ProcessManagerTest {
 	private Logger log = Logger.getLogger(getClass().getName());
 	private ProcessManager processManager;
 	private final PalesConfiguration palesConfiguration;
-	private static final Path DATA_DIRECTORY_PATH = Paths.get("C:/Temp/pales/data");
-	private static final Path STDERR_FILE_PATH = Paths.get("C:/Temp/pales/stderr.txt");
-	private static final Path STDOUT_FILE_PATH = Paths.get("C:/Temp/pales/stdout.txt");
-	private static final Path WORKING_DIRECTORY_PATH = Paths.get("C:/Temp/pales/wd");
+	private static final Path PALES_BASE_DIR = Paths.get("C:/Temp/pales");
+	private static final Path DATA_DIRECTORY_PATH = PALES_BASE_DIR.resolve("data");
+	private static final Path WORKING_DIRECTORY_PATH = PALES_BASE_DIR.resolve("wd");
 	private static final String PROCESS_MANAGER_ID = "8DC5E5B3-DB40-4558-87D0-207233C1E5F2";
 	
 	public ProcessManagerTest() {
@@ -88,12 +87,11 @@ public class ProcessManagerTest {
 	public void test() throws Exception {
 		start();
 
-		/*
 		final PalesLaunchRequest notepadRequest = new PalesLaunchRequest();
 		notepadRequest.setId(UUID.randomUUID().toString());
 		notepadRequest.setExecutable(Paths.get("C:/Windows/notepad.exe"));
-		notepadRequest.setStderrFile(STDERR_FILE_PATH);
-		notepadRequest.setStdoutFile(STDOUT_FILE_PATH);
+		notepadRequest.setStderrFile(PALES_BASE_DIR.resolve(notepadRequest.getId().toString() + ".err"));
+		notepadRequest.setStdoutFile(PALES_BASE_DIR.resolve(notepadRequest.getId().toString() + ".out"));
 		notepadRequest.setWorkingDirectory(WORKING_DIRECTORY_PATH);
 		processManager.launch(notepadRequest);
 
@@ -105,16 +103,14 @@ public class ProcessManagerTest {
 			}
 		}, 10000);
 		
-		*/
-		/*
 		final PalesLaunchRequest calcRequest = new PalesLaunchRequest();
 		calcRequest.setId(UUID.randomUUID().toString());
 		calcRequest.setExecutable(Paths.get("C:/Windows/System32/calc.exe"));
-		calcRequest.setStderrFile(STDERR_FILE_PATH);
-		calcRequest.setStdoutFile(STDOUT_FILE_PATH);
+		calcRequest.setStderrFile(PALES_BASE_DIR.resolve(calcRequest.getId().toString() + ".err"));
+		calcRequest.setStdoutFile(PALES_BASE_DIR.resolve(calcRequest.getId().toString() + ".out"));
 		calcRequest.setWorkingDirectory(WORKING_DIRECTORY_PATH);
 		processManager.launch(calcRequest);
-		*/
+
 		processPendingUpdates(true);
 		fail("Not yet implemented");
 	}
