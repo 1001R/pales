@@ -4,119 +4,18 @@
 #include <string.h>
 #include <stdlib.h>
 
-#ifdef WIN32
-#include <windows.h>
-
-#define PATHSEP '\\'
-
-static char *stpcpy(char *restrict to, const char *restrict from)
-{
-	for (; (*to = *from); ++from, ++to);
-	return(to);
-}
-
-#else
 #include <signal.h>
 #include "unix.h"
 #define PATHSEP '/'
 
-#endif
-
-
-#ifdef WIN32
-static char *stpcpy_quote(char *to, const char *from) {
-	bool quote = false;
-	for (const char *s = from; *s; s++) {
-		if (isspace(*s)) {
-			quote = true;
-			break;
-		}
-	}
-	if (quote) {
-		*to++ = '"';
-	}
-	to = stpcpy(to, from);
-	if (quote) {
-		*to++ = '"';
-	}
-	return to;
-}
-
-static int pales_exec(const char *execw, const char *procid, const char *dbdir, const char *workdir, const char *outfile, const char *errfile, const char *executable, char **argv) {
-	char *cmdline, *s;
-	int len, rv;
-	STARTUPINFO sinfo;
-	PROCESS_INFORMATION pinfo;
-
-	len = 21 + strlen(execw) + strlen(procid) + strlen(dbdir) + strlen(workdir) + strlen(executable);
-	if (outfile != NULL) {
-		len += strlen(outfile) + 6;
-	}
-	if (errfile != NULL) {
-		len += strlen(errfile) + 6;
-	}
-	for (char **arg = argv; *arg != NULL; arg++) {
-		len += strlen(*arg) + 3;
-	}
-	if ((s = cmdline = malloc(len + 1)) == NULL) {
-		return -1;
-	}
-	s = stpcpy_quote(s, execw);
-	s = stpcpy(s, " -i ");
-	s = stpcpy(s, procid);
-	s = stpcpy(s, " -d ");
-	s = stpcpy_quote(s, dbdir);
-	s = stpcpy(s, " -w ");
-	s = stpcpy_quote(s, workdir);
-	if (outfile != NULL) {
-		s = stpcpy(s, " -o ");
-		s = stpcpy_quote(s, outfile);
-	}
-	if (errfile != NULL) {
-		s = stpcpy(s, " -e ");
-		s = stpcpy_quote(s, errfile);
-	}
-	*s++ = ' ';
-	s = stpcpy_quote(s, executable);
-	for (char **arg = argv; *arg != NULL; arg++) {
-		*s++ = ' ';
-		s = stpcpy_quote(s, *arg);
-	}
-	*s = '\0';
-	memset(&sinfo, 0, sizeof(sinfo));
-    sinfo.cb = sizeof(sinfo);
-    memset(&pinfo, 0, sizeof(pinfo));
-    rv = CreateProcess(NULL,   // No module name (use command line)
-        cmdline,          // Command line
-        NULL,             // Process handle not inheritable
-        NULL,             // Thread handle not inheritable
-        FALSE,            // Set handle inheritance to FALSE
-        CREATE_NO_WINDOW, // No creation flags
-        NULL,             // Use parent's environment block
-        NULL,             // Use parent's starting directory
-        &sinfo,           // Pointer to STARTUPINFO structure
-        &pinfo);         // Pointer to PROCESS_INFORMATION structure
-	if (rv != 0) {
-		CloseHandle(pinfo.hProcess);
- 		CloseHandle(pinfo.hThread);
-	}
-	free(cmdline);
-	return rv ? 0 : -1;
-}
-#else
 
 #include "unix.h"
-
-#endif
 
 JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
 {
 	const char *c_procid, *c_palesdir, *c_workdir, *c_outfile = NULL, *c_errfile = NULL, *c_executable;
 	char *dbdir = NULL, *s;
-#	ifdef WIN32
-	char *execw = NULL;
-#	endif
 	char **c_argv = NULL;
 	jlong result = -1;
 	int n, i, j;
@@ -131,11 +30,6 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 	if (errfile != NULL) {
 		c_errfile = (*env)->GetStringUTFChars(env, errfile, NULL);
 	}
-#	ifdef WIN32
-	if ((execw = malloc(strlen(c_palesdir) + 15)) == NULL) {
-		goto cleanup;
-	}
-#	endif
 	if ((dbdir = malloc(strlen(c_palesdir) + 4)) == NULL) {
 		goto cleanup;
 	}
@@ -163,19 +57,11 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 			goto cleanup;
 		}
 	}
-#	ifdef WIN32
-	s = stpcpy(execw, c_palesdir);
-	s = stpcpy(s, "\\bin\\execw.exe");
-#	endif
 	s = stpcpy(dbdir, c_palesdir);
 	*s++ = PATHSEP;
 	s = stpcpy(s, "db");
 
-#	ifdef WIN32
-	result = pales_exec(execw, c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
-#	else
 	result = process_run(c_procid, dbdir, c_workdir, c_outfile, c_errfile, c_executable, c_argv);
-#	endif
 cleanup:
 	if (c_argv != NULL) {
 		for (char **arg = c_argv; *arg != NULL; arg++) {
@@ -183,11 +69,6 @@ cleanup:
 		}
 		free(c_argv);
 	}
-#	ifdef WIN32
-	if (execw != NULL) {
-		free(execw);
-	}
-#	endif
 	if (dbdir != NULL) {
 		free(dbdir);
 	}
