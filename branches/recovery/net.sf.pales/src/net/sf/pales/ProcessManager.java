@@ -32,6 +32,7 @@ import java.util.logging.Logger;
 
 import javax.xml.bind.DatatypeConverter;
 
+import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.eclipse.core.runtime.ListenerList;
@@ -41,6 +42,7 @@ public class ProcessManager {
 	private static final String DATA_PREFIX = "1";
 	private static final String STATUS_PREFIX = "0";
 	private static final long GRACE_PERIOD = 60000L;
+	private static final Base32 ID_ENCODER = new Base32();
 	
 	private final PalesConfiguration configuration;
 	private TreeMap<ImmutablePair<Long, ProcessHandle>, PalesNotification> notifications = new TreeMap<>();
@@ -416,11 +418,11 @@ public class ProcessManager {
 	private native static long launch(String execHelper, String processId, String palesDirectory, String workDirectory, String outFile, String errFile, String executable, String[] argv);
 	
 	static String encodePalesId(String palesId) {
-		return DatatypeConverter.printBase64Binary(palesId.getBytes(StandardCharsets.UTF_8)).replace('/', '-');
+		return ID_ENCODER.encodeToString(palesId.getBytes(StandardCharsets.UTF_8));
 	}
 	
 	static String decodePalesId(String encodedId) {
-		return new String(DatatypeConverter.parseBase64Binary(encodedId.replace('-', '/')), StandardCharsets.UTF_8);
+		return new String(ID_ENCODER.decode(encodedId), StandardCharsets.UTF_8);
 	}
 	
 	public void cancelProcess(String palesId) {
