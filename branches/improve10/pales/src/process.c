@@ -1,6 +1,5 @@
 #include "process.h"
 #include "win32.h"
-#include "log.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>

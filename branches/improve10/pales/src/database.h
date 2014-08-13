@@ -9,8 +9,8 @@ struct database {
 
 typedef struct database database_t;
 
-int db_open(database_t *db, const wchar_t *path);
-int db_update(database_t *db, process_t *proc);
-int db_close(database_t *db);
+int db_open(const wchar_t *path, const wchar_t *procid);
+int db_update(procstat_t status, ...);
+int db_close();
 
 #endif

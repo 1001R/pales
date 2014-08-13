@@ -9,7 +9,6 @@
 #include "options.h"
 #include "process.h"
 #include "database.h"
-#include "log.h"
 
 int wmain(int argc, wchar_t **argv)
 {
@@ -19,7 +18,6 @@ int wmain(int argc, wchar_t **argv)
 	HANDLE h_event = INVALID_HANDLE_VALUE;
 	HANDLE h_wait[2];
 	int r;
-	database_t db;
 	launch_request_t *request = NULL;
 	process_t *process = NULL;
 
@@ -27,29 +25,28 @@ int wmain(int argc, wchar_t **argv)
 		goto cleanup;
 	}
 	
-	log_init(opts.datadir, opts.procid);
+	if (db_open(opts.datadir, opts.procid) != 0) {
+		goto cleanup;
+	}
 
 	if (launch_request_new(opts.procid, opts.datadir, opts.workdir, opts.outfile, opts.errfile, &request) != 0) {
 		goto cleanup;
 	}
 
-	if (db_open(&db, opts.datadir) != 0) {
+	h_event = CreateEvent(NULL, FALSE, FALSE, opts.procid);
+	if (h_event == INVALID_HANDLE_VALUE) {
+		db_update(error, L"Cannot create event object for cancellation");
 		goto cleanup;
 	}
-	
+
 	if (process_launch(request, argc - optind, argv + optind, &process) != 0) {
 		goto cleanup;
 	}
-	if (db_update(&db, process) != 0) {
+	if (db_update(process->status, process->pid) != 0) {
 		goto cleanup;
 	}
 
 	h_wait[0] = process->handle;
-	h_event = CreateEvent(NULL, FALSE, FALSE, process->id);
-	if (h_event == INVALID_HANDLE_VALUE) {
-		log_message(L"Cannot create event object for cancellation");
-		goto cleanup;
-	}
 	h_wait[1] = h_event;
 
 	r = WaitForMultipleObjects(2, h_wait, FALSE, INFINITE);
@@ -60,7 +57,7 @@ int wmain(int argc, wchar_t **argv)
 			if (process_cancel(process) != 0) {
 				goto cleanup;
 			}
-			process->status = cancelled;
+			db_update(cancelled);
 			WaitForSingleObject(process->handle, 10000);
 		}
 		else {
@@ -70,14 +67,12 @@ int wmain(int argc, wchar_t **argv)
 			if (process_wait(process) != 0) {
 				goto cleanup;
 			}
-			process->status = finished;
+			db_update(finished, process->exitcode);
 		}
-		if (db_update(&db, process) == 0) {
-			exit_code = EXIT_SUCCESS;
-		}
+		exit_code = EXIT_SUCCESS;
 	}
 	else {
-		log_message(L"System call WaitForMultipleObjects failed with error %d", GetLastError());
+		db_update(error, L"System call WaitForMultipleObjects failed with error %d", GetLastError());
 	}
 cleanup:
 	if (process != NULL) {
