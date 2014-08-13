@@ -7,7 +7,8 @@
 enum procstat {
 	running,
 	finished,
-	cancelled
+	cancelled,
+	error
 };
 
 typedef enum procstat procstat_t;
