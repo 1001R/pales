@@ -12,7 +12,7 @@ public class ProcessFile {
 	private final boolean data;
 	private long lastModifiedTime;
 	
-	public ProcessFile(Path filePath) {
+	public ProcessFile(Path filePath) throws IOException {
 		this.filePath = filePath;
 		String fileName = filePath.getFileName().toString();
 		int dotPos = fileName.lastIndexOf('.');
@@ -23,12 +23,7 @@ public class ProcessFile {
 		processId = ProcessManager.decodePalesId(fileName.substring(1, dotPos));
 		processStatus = ProcessStatus.fromAbbreviation(extension.charAt(0));
 		data = fileName.charAt(0) == '1';
-		
-		try {
-			lastModifiedTime = Files.getLastModifiedTime(filePath).toMillis();
-		} catch (IOException e) {
-			PalesLogger.SINGLETON.getLogger().log(Level.WARNING, "Cannot determine time of last modification of file " + filePath, e);
-		}
+		lastModifiedTime = Files.getLastModifiedTime(filePath).toMillis();
 	}
 
 	public Path getFilePath() {

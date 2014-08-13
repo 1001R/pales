@@ -95,6 +95,7 @@ public class ProcessManagerTest {
 		notepadRequest.setWorkingDirectory(WORKING_DIRECTORY_PATH);
 		processManager.launch(notepadRequest);
 
+		/*
 		Timer t = new Timer();
 		t.schedule(new TimerTask() {
 			@Override
@@ -111,6 +112,8 @@ public class ProcessManagerTest {
 		calcRequest.setWorkingDirectory(WORKING_DIRECTORY_PATH);
 		processManager.launch(calcRequest);
 
+		*/
+		
 		processPendingUpdates(true);
 		fail("Not yet implemented");
 	}

@@ -10,6 +10,7 @@ import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardWatchEventKinds;
@@ -126,8 +127,10 @@ public class ProcessManager {
 			        	if (!processFile.isData()) {
 			        		filesToProcess.add(processFile);
 			        	}
-			        } catch (Throwable t) {
-			        	LOGGER.log(Level.WARNING, "Skipping file: " + file, t);
+			        } catch (NoSuchFileException nsfe) {
+			        	// file exists no longer
+			        } catch (IOException ioe) {
+			        	LOGGER.log(Level.WARNING, "Unable to process file: " + file, ioe);
 			        }
 				}				        
 
@@ -261,11 +264,7 @@ public class ProcessManager {
 		} else if (processStatus == ProcessStatus.RUNNING) {
 			try {
 				List<String> lines = Files.readAllLines(dataFilePath, StandardCharsets.US_ASCII);
-				String s = lines.get(0);
-				if (s.charAt(0) == '\uFEFF') {
-					s = s.substring(1);
-				}
-				return new Integer(s);
+				return new Integer(lines.get(0));
 			} catch (IOException e) {
 				throw new RuntimeException("Cannot read PID from file " + dataFilePath, e);
 			}
@@ -329,7 +328,8 @@ public class ProcessManager {
 				removeProcessFromDatabase(record.getId());
 			}
 			else if (record.getStatus() == ProcessStatus.REQUESTED) {
-				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
+//				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
+				long delay = 30000;
 				if (delay < 0) {
 					doLaunch((PalesLaunchRequest) record.getData());
 				} else {
