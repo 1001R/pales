@@ -14,6 +14,8 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <semaphore.h>
+#include <string.h>
 
 typedef enum procstat {
 	running,
@@ -126,6 +128,7 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
 		_exit(EXIT_FAILURE);
 	}
     sigfillset(&sigset);
+	sigdelset(&sigset, SIGCHLD);
     if (sigprocmask(SIG_BLOCK, &sigset, NULL) != 0) {
     	syslog(LOG_ERR, "Can't set signal mask: %m");
     	_exit(EXIT_FAILURE);
@@ -144,10 +147,26 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
 		process_exec(rundir, outfile, errfile, executable, argv);
 	}
 	else if (pid > 0) {
-		int s;
-		bool done;
+		int w;
 		procstat_t pstat = running;
 		int status, ecode = EXIT_SUCCESS;
+		sem_t *sem_cancel;
+		char *sem_cancel_name = NULL, *s;
+
+		if ((sem_cancel_name = malloc(strlen(procid) + 8)) == NULL) {
+			syslog(LOG_ERR, "Out of memory");
+			killpg(pid, SIGKILL);
+			_exit(EXIT_FAILURE);
+		}
+		s = stpcpy(sem_cancel_name, "/PALES:");
+		stpcpy(s, procid);
+
+		sem_cancel = sem_open(sem_cancel_name, O_CREAT | O_EXCL, 0600, 0);
+		if (sem_cancel == SEM_FAILED) {
+			syslog(LOG_ERR, "Can't create semaphore to receive process cancellation requests");
+			killpg(pid, SIGKILL);
+			_exit(EXIT_FAILURE);
+		}
 
 		if (db_update(dbdir, procid, running, pid) == -1) {
 			syslog(LOG_ERR, "Can't update process database: %m");
@@ -155,42 +174,33 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
 			_exit(EXIT_FAILURE);
 		}
 
-		done = false;
-        sigemptyset(&sigset);
-        sigaddset(&sigset, SIGCHLD);
-        sigaddset(&sigset, SIGTERM);
-        while (!done) {
-            if (sigwait(&sigset, &s) == 0) {
-            	switch (s) {
-            	case SIGTERM:
-            		syslog(LOG_NOTICE, "Process cancellation requested");
-                    sigdelset(&sigset, SIGTERM);
-                    killpg(pid, SIGKILL);
-                    pstat = cancelled;
-                    done = true;
-                    break;
-            	case SIGCHLD:
-                    pstat = finished;
-                    done = true;
-                    break;
-            	case SIGALRM:
-            		break;
-                }
-            }
-            else {
-            	syslog(LOG_ERR, "System call `sigwait' failed unexpectedly: %m");
-            	_exit(EXIT_FAILURE);
-            }
-        }
-        s = waitpid(pid, &status, 0);
+		if (sem_wait(sem_cancel) == -1) {
+			if (errno != EINTR) {
+				syslog(LOG_ERR, "sem_wait failed: %m");
+				killpg(pid, SIGKILL);
+				_exit(EXIT_FAILURE);
+			}
+			pstat = finished;
+		}
+		else {
+			syslog(LOG_NOTICE, "Process cancellation requested");
+			sigdelset(&sigset, SIGTERM);
+			killpg(pid, SIGKILL);
+			pstat = cancelled;
+		}
+
+        w = waitpid(pid, &status, 0);
         if (db_update(dbdir, procid, pstat, pid) == -1) {
         	syslog(LOG_ERR, "Can't update process database: %m");
         	ecode = EXIT_FAILURE;
         }
-        if (s == -1) {
+        if (w == -1) {
             syslog(LOG_ERR, "System call `waitpid' failed unexpectedly: %m");
             ecode = EXIT_FAILURE;
         }
+        sem_close(sem_cancel);
+        sem_unlink(sem_cancel_name);
+		free(sem_cancel_name);
         _exit(ecode);
 	}
 	syslog(LOG_ERR, "Can't fork child process: %m");
