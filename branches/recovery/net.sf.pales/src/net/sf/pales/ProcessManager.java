@@ -163,10 +163,12 @@ public class ProcessManager {
 					record = new ProcessRecord(file.getProcessId());
 					updateProcessRecord(record, file);
 					processRecords.putIfAbsent(record.getId(), record);
+					markStale(record);
 				} else {
 					synchronized (record) {
 						updateProcessRecord(record, file);
 					}
+					markStale(record);
 				}
 			} catch (InterruptedException e) {
 				return;
@@ -178,12 +180,15 @@ public class ProcessManager {
 		if (record.getStatus() == null || file.getProcessStatus().ordinal() > record.getStatus().ordinal()) {						
 			record.setStatus(file.getProcessStatus());
 			record.setLastMod(file.getLastModifiedTime());
-			if (!record.isStale()) {							
-				record.setStale(true);
-				modifiedProcesses.add(record.getId());
-				notifyListeners();
-			}
 		}
+	}
+	
+	private void markStale(ProcessRecord record) {
+		if (!record.isStale()) {							
+			record.setStale(true);
+			modifiedProcesses.add(record.getId());
+			notifyListeners();
+		}		
 	}
 	
 	public ProcessRecord getProcessRecord(String processId) {
@@ -328,8 +333,7 @@ public class ProcessManager {
 				removeProcessFromDatabase(record.getId());
 			}
 			else if (record.getStatus() == ProcessStatus.REQUESTED) {
-//				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
-				long delay = 30000;
+				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
 				if (delay < 0) {
 					doLaunch((PalesLaunchRequest) record.getData());
 				} else {
@@ -443,20 +447,6 @@ public class ProcessManager {
 		}
 	}
 	
-	public PalesNotification fetchNextNotification() {
-		Map.Entry<ImmutablePair<Long, ProcessHandle>, PalesNotification> firstEntry = null;
-		synchronized (notifications) {
-			firstEntry = notifications.pollFirstEntry();
-			if (firstEntry != null) {
-				PalesNotification notification = firstEntry.getValue();
-				if (notification.getProcessStatus() == ProcessStatus.FINISHED || notification.getProcessStatus() == ProcessStatus.CANCELLED) {
-					deleteProcess(notification.getProcessHandle().getPalesId());
-				}
-			}
-		}
-		return firstEntry != null ? firstEntry.getValue() : null;
-	}
-	
 	public ProcessRecord getNextUpdate(boolean wait) {
 		while (true) {
 			String id = null;
@@ -474,27 +464,6 @@ public class ProcessManager {
 					record.setStale(false);
 					return record.clone();
 				}
-			}
-		}
-	}
-	
-	private void deleteProcess(String processId) {
-		List<Path> filesToDelete = new ArrayList<>();
-		try (DirectoryStream<Path> ds = Files.newDirectoryStream(configuration.getDatabaseDirectory())) {
-			for (Path p : ds) {
-				if (p.getFileName().toString().startsWith(processId)) {
-					filesToDelete.add(p);
-				}
-			}
-		}
-		catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		for (Path p : filesToDelete) {
-			try {
-				deleteRetry(p);
-			} catch (Exception e) {
-				p.toFile().deleteOnExit();
 			}
 		}
 	}
@@ -523,18 +492,11 @@ public class ProcessManager {
 	}
 	
 	public boolean hasBeenLaunched(String processId) {
-		synchronized (notifications) {
-			for (PalesNotification notification : notifications.values()) {
-				if (notification.getProcessHandle().getPalesId().equals(processId)) {
-					return true;
-				}
-			}
-		}
-		return false;
+		return processRecords.contains(processId);
 	}
 	
 	public void removeProcess(String processId) throws IOException {
-		ProcessRecord record = processRecords.get(processId);
+		ProcessRecord record = processRecords.remove(processId);
 		if (record == null) {
 			return;
 		}
@@ -542,7 +504,7 @@ public class ProcessManager {
 			if (!record.getStatus().isFinal()) {
 				return;
 			}
-			processRecords.remove(processId);
+			record.setStale(true);
 		}
 		Path statusFilePath = configuration.getDatabaseDirectory().resolve(STATUS_PREFIX + encodePalesId(record.getId()) + '.' + ProcessStatus.DELETING.getAbbreviation());
 		createEmptyFile(statusFilePath);
@@ -575,5 +537,9 @@ public class ProcessManager {
 		catch (IOException e) {
 			throw new RuntimeException("Cannot delete process " + processId + " from database", e);
 		}
+	}
+	
+	private String[] getProcessIds() {
+		return processRecords.keySet().toArray(new String[0]);
 	}
 }
