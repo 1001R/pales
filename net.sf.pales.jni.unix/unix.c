@@ -21,10 +21,10 @@
 
 
 static sem_t *SEM_CANCEL = SEM_FAILED;
-static volatile bool SIGCHLD_RECV = false;
+static volatile bool PROC_EXITED = false;
 
 static void sigaction_void(int signal, siginfo_t *info, void *context) {
-    SIGCHLD_RECV = true;
+    PROC_EXITED = true;
     if (SEM_CANCEL != SEM_FAILED) {
 	sem_post(SEM_CANCEL);
     }
@@ -87,14 +87,12 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
         syslog(LOG_ERR, "Can't install handler for SIGCHLD: %m");
         _exit(EXIT_FAILURE);
     }
-    /*
     sigfillset(&sigset);
     sigdelset(&sigset, SIGCHLD);
     if (sigprocmask(SIG_BLOCK, &sigset, NULL) != 0) {
         syslog(LOG_ERR, "Can't set signal mask: %m");
         _exit(EXIT_FAILURE);
     }
-    */
     if (chdir("/") == -1) {
         syslog(LOG_ERR, "Can't change current working directory to /: %m");
         _exit(EXIT_FAILURE);
@@ -146,7 +144,7 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
 	    killpg(pid, SIGKILL);
 	    _exit(EXIT_FAILURE);
         }
-	if (SIGCHLD_RECV) {
+	if (PROC_EXITED) {
             pstat = finished;
 	}
         else {
