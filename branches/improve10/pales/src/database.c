@@ -65,6 +65,9 @@ static wchar_t *process_encode(const wchar_t *procid, procstat_t status)
 	case cancelled:
 		*s++ = L'C';
 		break;
+	case error:
+		*s++ = L'E';
+		break;
 	}
 	*s = L'\0';
 	return filename;
