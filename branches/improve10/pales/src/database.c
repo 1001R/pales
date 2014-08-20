@@ -191,7 +191,7 @@ int db_update(procstat_t status, ...)
 	if (status == error) {
 		va_list args;
 		const wchar_t *format;
-		wchar_t *sep = wcsrchr(path, PATHSEP);
+
 		sep[1] = L'1';
 		va_start(args, status);
 		format = va_arg(args, const wchar_t*);
@@ -203,7 +203,7 @@ int db_update(procstat_t status, ...)
 		goto cleanup;
 	}
 	if (status == finished || status == cancelled || status == error) {
-		path[wcslen(path) - 1] = 'X';
+		path[wcslen(path) - 1] = L'X';
 		rv = create_empty_file(path);
 	}
 	else {
