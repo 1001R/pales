@@ -78,7 +78,6 @@ static int create_empty_file(const wchar_t *filepath)
 	HANDLE h;
 	h = CreateFile(filepath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
-		log_message(L"Cannot create empty file: %s", filepath);
 		return -1;
 	}
 	FlushFileBuffers(h);
@@ -116,7 +115,7 @@ int writeErrorMessage(const wchar_t *filePath, const wchar_t *format, va_list ar
 	char *buf = NULL;
 	HANDLE fileHandle = INVALID_HANDLE_VALUE;
 
-	va_copy(argsCopy, args);
+	argsCopy = args;
 	int wlen = _vscwprintf(format, args);
 	if ((wbuf = calloc(wlen + 1, sizeof(wchar_t))) == NULL) {
 		va_end(argsCopy);
@@ -160,7 +159,13 @@ cleanup:
 int db_update(procstat_t status, ...)
 {
 	int rv = -1;
-	wchar_t *path = process_encode(PROCESS_ID, status);
+	wchar_t *path;
+
+	if (DB_DIR_PATH == NULL || PROCESS_ID == NULL) {
+		return -1;
+	}
+
+	path = process_encode(PROCESS_ID, status);
 	if (path == NULL) {
 		return -1;
 	}
