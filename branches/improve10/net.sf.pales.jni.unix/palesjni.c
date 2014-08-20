@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <semaphore.h>
 #include <signal.h>
 #include "unix.h"
 #define PATHSEP '/'
@@ -93,24 +93,58 @@ cleanup:
 	return result;
 }
 
-JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id, jlong pid)
-{
-	bool success = false;
-#	ifdef WIN32
-	HANDLE event;
+static sem_t *open_cancel_semaphore(const char *procid) {
+    char *semname, *s;
+    int len;
+    sem_t *sem;
 
-	const char *ename = (*env)->GetStringUTFChars(env, process_id, NULL);
-	event = CreateEvent(NULL, FALSE, FALSE, ename);
-	(*env)->ReleaseStringUTFChars(env, process_id, ename);
-	success = event != NULL && SetEvent(event);
-#	else
-	success = kill(pid, SIGTERM) == 0;
-#	endif
-	if (!success) {
-		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
-        if (rte == NULL) {
-			(*env)->FatalError(env, "Can't find class java.lang.RuntimeException");
-		}
-		(*env)->ThrowNew(env, rte, "Can't cancel process");
-	}
+    len = strlen(procid) + 8;
+    if ((s = semname = (char*) malloc(len)) == NULL) {
+	return SEM_FAILED;
+    }
+    s = stpcpy(s, "/PALES:");
+    s = stpcpy(s, procid);
+    sem = sem_open(semname, 0);
+    free(semname);
+    return sem;
+}
+
+JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id)
+{
+    int r;
+    const char *errmsg = NULL;
+    const char *procid;
+    jclass rte;
+
+    procid = (*env)->GetStringUTFChars(env, process_id, NULL);
+    sem_t *sem = open_cancel_semaphore(procid);
+    (*env)->ReleaseStringUTFChars(env, process_id, procid);
+    if (sem == SEM_FAILED) {
+	return;
+    }
+    r = sem_post(sem);
+    sem_close(sem);
+    if (r != 0) {
+	errmsg = "Failed to unlock cancellation semaphore";
+	goto fail;
+    }
+    return;
+fail:
+    rte = (*env)->FindClass(env, "java/lang/RuntimeException");
+    if (rte == NULL) {
+	(*env)->FatalError(env, "Can't find class java.lang.RuntimeException");
+    }
+    (*env)->ThrowNew(env, rte, errmsg);
+}
+
+JNIEXPORT jboolean JNICALL Java_net_sf_pales_OS_isProcessRunning(JNIEnv *env, jclass class, jstring process_id) {
+    jboolean retval = 0;
+    const char *procid = (*env)->GetStringUTFChars(env, process_id, NULL);
+    sem_t *sem = open_cancel_semaphore(procid);
+    (*env)->ReleaseStringUTFChars(env, process_id, procid);
+    if (sem != SEM_FAILED) {
+	retval = 1;
+	sem_close(sem);
+    }
+    return retval;
 }
