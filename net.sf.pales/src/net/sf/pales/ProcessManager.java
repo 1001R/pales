@@ -180,6 +180,7 @@ public class ProcessManager {
 		if (record.getStatus() == null || file.getProcessStatus().ordinal() > record.getStatus().ordinal()) {						
 			record.setStatus(file.getProcessStatus());
 			record.setLastMod(file.getLastModifiedTime());
+			record.setData(readData(file.getDataFilePath(), record.getStatus()));
 		}
 	}
 	
@@ -273,6 +274,13 @@ public class ProcessManager {
 			} catch (IOException e) {
 				throw new RuntimeException("Cannot read PID from file " + dataFilePath, e);
 			}
+		} else if (processStatus == ProcessStatus.FINISHED) {
+			try {
+				List<String> lines = Files.readAllLines(dataFilePath, StandardCharsets.US_ASCII);
+				return new Integer(lines.get(0));
+			} catch (IOException e) {
+				throw new RuntimeException("Cannot read exit code from file " + dataFilePath, e);
+			}			
 		}
 		return null;
 	}
