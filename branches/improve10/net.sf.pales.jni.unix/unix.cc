@@ -14,19 +14,24 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <semaphore.h>
 #include <string.h>
 #include <stdbool.h>
 #include "database.h"
 
+#include "semaphore.h"
+#include <sstream>
+#include <memory>
+#include <iostream>
 
-static sem_t *SEM_CANCEL = SEM_FAILED;
+using namespace std;
+
+static unique_ptr<Semaphore> SEM_CANCEL;
 static volatile bool PROC_EXITED = false;
 
 static void sigaction_void(int signal, siginfo_t *info, void *context) {
     PROC_EXITED = true;
-    if (SEM_CANCEL != SEM_FAILED) {
-	sem_post(SEM_CANCEL);
+    if (SEM_CANCEL) {
+	SEM_CANCEL->post();
     }
 }
 
@@ -107,67 +112,47 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
         process_exec(rundir, outfile, errfile, executable, argv);
     }
     else if (pid > 0) {
-        int w;
-        procstat_t pstat = running;
-        int status, ecode = EXIT_SUCCESS;
-        char *sem_cancel_name = NULL, *s;
-	
-	if (db_open(dbdir, procid) == -1) {
-            syslog(LOG_ERR, "Can't open process database: %m");
-            killpg(pid, SIGKILL);
-            _exit(EXIT_FAILURE);
+	try {
+	    Database db(dbdir, procid);
+	    try {
+		ostringstream terminationSemaphoreName;
+		terminationSemaphoreName << "/PALES:" << procid;
+		SEM_CANCEL.reset(new Semaphore(terminationSemaphoreName.str(), O_EXCL, 0600, 0, true));
+		db.update(Database::RUNNING, pid);
+		SEM_CANCEL->wait();
+		if (!PROC_EXITED) {
+		    syslog(LOG_NOTICE, "Process cancellation requested");
+		    sigdelset(&sigset, SIGTERM);
+		    killpg(pid, SIGKILL);
+		}
+		
+		int status;
+		int w = waitpid(pid, &status, 0);
+		if (w == -1) {
+		    throw SystemError("waitpid", __FILE__, __LINE__);
+		}
+
+		if (WIFSIGNALED(status) &&  WTERMSIG(status) == SIGKILL) {
+		    db.update(Database::CANCELLED);
+		}
+		else {
+		    db.update(Database::FINISHED, WEXITSTATUS(status));
+		}
+	    }
+	    catch (const runtime_error& e) {
+		db.update(Database::ERROR, e.what());
+		db.close();
+		killpg(pid, SIGKILL);
+		exit(EXIT_FAILURE);
+	    }
+	    db.close();
 	}
-
-        if ((sem_cancel_name = malloc(strlen(procid) + 8)) == NULL) {
-            syslog(LOG_ERR, "Out of memory");
-            killpg(pid, SIGKILL);
-            _exit(EXIT_FAILURE);
-        }
-        s = stpcpy(sem_cancel_name, "/PALES:");
-        stpcpy(s, procid);
-
-        SEM_CANCEL = sem_open(sem_cancel_name, O_CREAT | O_EXCL, 0600, 0);
-        if (SEM_CANCEL == SEM_FAILED) {
-            syslog(LOG_ERR, "Can't create semaphore to receive process cancellation requests");
-            killpg(pid, SIGKILL);
-            _exit(EXIT_FAILURE);
-        }
-
-        if (db_update(running, pid) == -1) {
-            syslog(LOG_ERR, "Can't update process database: %m");
-            killpg(pid, SIGKILL);
-            _exit(EXIT_FAILURE);
-        }
-
-        if (sem_wait(SEM_CANCEL) == -1) {
-	    syslog(LOG_ERR, "sem_wait failed: %m");
+	catch (const runtime_error& rte) {
+	    cerr << "A fatal unexpected error occured: " << rte.what() << endl;
 	    killpg(pid, SIGKILL);
-	    _exit(EXIT_FAILURE);
-        }
-	if (PROC_EXITED) {
-            pstat = finished;
+	    exit(EXIT_FAILURE);
 	}
-        else {
-            syslog(LOG_NOTICE, "Process cancellation requested");
-            sigdelset(&sigset, SIGTERM);
-            killpg(pid, SIGKILL);
-            pstat = cancelled;
-        }
-
-        w = waitpid(pid, &status, 0);
-        if (db_update(pstat, pid) == -1) {
-            syslog(LOG_ERR, "Can't update process database: %m");
-            ecode = EXIT_FAILURE;
-        }
-	db_close();
-        if (w == -1) {
-            syslog(LOG_ERR, "System call `waitpid' failed unexpectedly: %m");
-            ecode = EXIT_FAILURE;
-        }
-        sem_close(SEM_CANCEL);
-        sem_unlink(sem_cancel_name);
-        free(sem_cancel_name);
-        _exit(ecode);
+        exit(EXIT_SUCCESS);
     }
     syslog(LOG_ERR, "Can't fork child process: %m");
     _exit(EXIT_FAILURE);
@@ -180,6 +165,13 @@ pid_t process_run(const char *procid, const char *dbdir, const char *workdir, co
     if (executable == NULL) {
         return -1;
     }
+    
+    struct sigaction sa;
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_NOCLDWAIT;
+    sigaction(SIGCHLD, &sa, nullptr);
+
     pid = fork();
     if (pid == -1) {
         return -1;
