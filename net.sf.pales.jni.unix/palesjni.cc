@@ -11,7 +11,7 @@
 
 #include "unix.h"
 
-JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass class, jstring execwPath, jstring procid, jstring palesdir,
+JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jclass javaClass, jstring execwPath, jstring procid, jstring palesdir,
 		jstring workdir, jstring outfile, jstring errfile, jstring executable, jobjectArray argv)
 {
 	const char *c_procid, *c_palesdir, *c_workdir, *c_outfile = NULL, *c_errfile = NULL, *c_executable;
@@ -20,25 +20,25 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 	jlong result = -1;
 	int n, i, j;
 
-	c_procid = (*env)->GetStringUTFChars(env, procid, NULL);
-	c_palesdir = (*env)->GetStringUTFChars(env, palesdir, NULL);
-	c_workdir = (*env)->GetStringUTFChars(env, workdir, NULL);
-	c_executable = (*env)->GetStringUTFChars(env, executable, NULL);
+	c_procid = env->GetStringUTFChars(procid, NULL);
+	c_palesdir = env->GetStringUTFChars(palesdir, NULL);
+	c_workdir = env->GetStringUTFChars(workdir, NULL);
+	c_executable = env->GetStringUTFChars(executable, NULL);
 	if (outfile != NULL) {
-		c_outfile = (*env)->GetStringUTFChars(env, outfile, NULL);
+		c_outfile = env->GetStringUTFChars(outfile, NULL);
 	}
 	if (errfile != NULL) {
-		c_errfile = (*env)->GetStringUTFChars(env, errfile, NULL);
+		c_errfile = env->GetStringUTFChars(errfile, NULL);
 	}
-	if ((dbdir = malloc(strlen(c_palesdir) + 4)) == NULL) {
+	if ((dbdir = (char*) malloc(strlen(c_palesdir) + 4)) == NULL) {
 		goto cleanup;
 	}
 	i = j = 0;
-	n = (*env)->GetArrayLength(env, argv) + 1;
+	n = env->GetArrayLength(argv) + 1;
 #	ifndef WIN32
 	n++;
 #	endif
-	if ((c_argv = calloc(n, sizeof(void*))) == NULL) {
+	if ((c_argv = (char**) calloc(n, sizeof(void*))) == NULL) {
 		goto cleanup;
 	}
 #	ifndef WIN32
@@ -46,13 +46,13 @@ JNIEXPORT jlong JNICALL Java_net_sf_pales_ProcessManager_launch(JNIEnv *env, jcl
 	i++;
 #	endif
 	for ( ; i < n - 1; i++) {
-		jstring str = (*env)->GetObjectArrayElement(env, argv, j++);
+		jstring str = (jstring) env->GetObjectArrayElement(argv, j++);
 		if (str == NULL) {
 			goto cleanup;
 		}
-		const char *s = (*env)->GetStringUTFChars(env, str, NULL);
+		const char *s = env->GetStringUTFChars(str, NULL);
 		c_argv[i] = strdup(s);
-		(*env)->ReleaseStringUTFChars(env, str, s);
+		env->ReleaseStringUTFChars(str, s);
 		if (c_argv[i] == NULL) {
 			goto cleanup;
 		}
@@ -73,22 +73,22 @@ cleanup:
 		free(dbdir);
 	}
 	if (c_errfile != NULL) {
-		(*env)->ReleaseStringUTFChars(env, errfile, c_errfile);
+		env->ReleaseStringUTFChars(errfile, c_errfile);
 	}
 	if (c_outfile != NULL) {
-		(*env)->ReleaseStringUTFChars(env, outfile, c_outfile);
+		env->ReleaseStringUTFChars(outfile, c_outfile);
 	}
-	(*env)->ReleaseStringUTFChars(env, executable, c_executable);
-	(*env)->ReleaseStringUTFChars(env, workdir, c_workdir);
-	(*env)->ReleaseStringUTFChars(env, palesdir, c_palesdir);
-	(*env)->ReleaseStringUTFChars(env, procid, c_procid);
+	env->ReleaseStringUTFChars(executable, c_executable);
+	env->ReleaseStringUTFChars(workdir, c_workdir);
+	env->ReleaseStringUTFChars(palesdir, c_palesdir);
+	env->ReleaseStringUTFChars(procid, c_procid);
 
 	if (result == -1) {
-		jclass rte = (*env)->FindClass(env, "java/lang/RuntimeException");
+		jclass rte = env->FindClass("java/lang/RuntimeException");
 		if (rte == NULL) {
-			(*env)->FatalError(env, "Can't find class java.lang.RuntimeException");
+			env->FatalError("Can't find class java.lang.RuntimeException");
 		}
-		(*env)->ThrowNew(env, rte, "Can't launch process");
+		env->ThrowNew(rte, "Can't launch process");
 	}
 	return result;
 }
@@ -109,16 +109,16 @@ static sem_t *open_cancel_semaphore(const char *procid) {
     return sem;
 }
 
-JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass class, jstring process_id)
+JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass javaClass, jstring process_id)
 {
     int r;
     const char *errmsg = NULL;
     const char *procid;
     jclass rte;
 
-    procid = (*env)->GetStringUTFChars(env, process_id, NULL);
+    procid = env->GetStringUTFChars(process_id, NULL);
     sem_t *sem = open_cancel_semaphore(procid);
-    (*env)->ReleaseStringUTFChars(env, process_id, procid);
+    env->ReleaseStringUTFChars(process_id, procid);
     if (sem == SEM_FAILED) {
 	return;
     }
@@ -130,18 +130,18 @@ JNIEXPORT void JNICALL Java_net_sf_pales_OS_cancelProcess(JNIEnv *env, jclass cl
     }
     return;
 fail:
-    rte = (*env)->FindClass(env, "java/lang/RuntimeException");
+    rte = env->FindClass("java/lang/RuntimeException");
     if (rte == NULL) {
-	(*env)->FatalError(env, "Can't find class java.lang.RuntimeException");
+	env->FatalError("Can't find class java.lang.RuntimeException");
     }
-    (*env)->ThrowNew(env, rte, errmsg);
+    env->ThrowNew(rte, errmsg);
 }
 
-JNIEXPORT jboolean JNICALL Java_net_sf_pales_OS_isProcessRunning(JNIEnv *env, jclass class, jstring process_id) {
+JNIEXPORT jboolean JNICALL Java_net_sf_pales_OS_isProcessRunning(JNIEnv *env, jclass javaClass, jstring process_id) {
     jboolean retval = 0;
-    const char *procid = (*env)->GetStringUTFChars(env, process_id, NULL);
+    const char *procid = env->GetStringUTFChars(process_id, NULL);
     sem_t *sem = open_cancel_semaphore(procid);
-    (*env)->ReleaseStringUTFChars(env, process_id, procid);
+    env->ReleaseStringUTFChars(process_id, procid);
     if (sem != SEM_FAILED) {
 	retval = 1;
 	sem_close(sem);

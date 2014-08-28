@@ -3,12 +3,13 @@
 #include <semaphore.h>
 #include <err.h>
 #include <unistd.h>
+#include <cstring>
 
 #define BASEDIR "/home/improve/temp/pales"
 
 int main(int argc, char **argv)
 {
-    char *proc_argv[] = { "script.sh", "60", NULL };
+    char *proc_argv[] = { strdup("script.sh"), strdup("60"), NULL };
     process_run("DEADBEEF",
 	BASEDIR "/db",
 	BASEDIR "/wd",

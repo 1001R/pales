@@ -1,16 +1,28 @@
-#ifndef DATABASE_H
-#define DATABASE_H
+#pragma once
+#include <string>
 
-typedef enum procstat {
-    running,
-    finished,
-    cancelled,
-    error
-}
-procstat_t;
+using namespace std;
 
-int db_open(const char *path, const char *procid);
-int db_update(procstat_t status, ...);
-int db_close();
+class Database {
+public:
+    enum State { RUNNING, FINISHED, CANCELLED, ERROR };
+private:
+    static const char PATHSEP = '/';
 
-#endif
+    string m_dirPath;
+    string m_processId;
+    int m_dirDescriptor;
+
+    string createFileName(State state) const;
+    void createEmptyFile(const string& filePath);
+public:
+    Database(const char* dirPath, const char* procid);
+    ~Database();
+    //setRunning(pid_t pid);
+    //setFinished(int exitCode);
+    //setCancelled();
+    void update(State s, ...);
+    void sync();
+    void close();
+};
+
