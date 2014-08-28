@@ -356,11 +356,6 @@ public class ProcessManager {
 				}
 			}
 		}
-		
-		// debug only
-		for (ProcessRecord record : processRecords.values()) {
-			System.out.println(record);
-		}
 	}
 	
 	private boolean hasTerminated(String processId) {
