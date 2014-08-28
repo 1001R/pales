@@ -3,7 +3,6 @@ package net.sf.pales;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.logging.Level;
 
 public class ProcessFile {
 	private final Path filePath;
@@ -44,5 +43,13 @@ public class ProcessFile {
 
 	public long getLastModifiedTime() {
 		return lastModifiedTime;
+	}
+	
+	public Path getDataFilePath() {
+		if (isData()) {
+			return filePath;
+		}
+		String fileName = filePath.getFileName().toString();
+		return filePath.getParent().resolve("1" + fileName.substring(1));
 	}
 }

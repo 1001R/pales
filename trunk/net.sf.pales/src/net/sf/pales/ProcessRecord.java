@@ -10,7 +10,6 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 	private Object data;
 	private long lastMod;
 	private boolean stale = false;
-	private int exitCode = 0;
 	
 	ProcessRecord(String id) {
 		this.id = id;
@@ -53,11 +52,7 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 	}
 	
 	public int getExitCode() {
-		return exitCode;
-	}
-	
-	public void setExitCode(int exitCode) {
-		this.exitCode = exitCode;
+		return (Integer) getData();
 	}
 	
 	public void setStale(boolean stale) {
@@ -93,7 +88,7 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 		case RUNNING:
 			break;
 		case FINISHED:
-			stringBuilder.append("exitCode", exitCode);
+			stringBuilder.append("exitCode", getExitCode());
 			break;
 		case ERROR:
 			stringBuilder.append("message", getData());
