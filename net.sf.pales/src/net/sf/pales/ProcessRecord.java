@@ -55,6 +55,10 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 		return (Integer) getData();
 	}
 	
+	public String getErrorMessage() {
+		return (String) getData();
+	}
+	
 	public void setStale(boolean stale) {
 		this.stale = stale;
 	}
