@@ -191,9 +191,15 @@ public class ProcessManager {
 	}
 	
 	public ProcessRecord getProcessRecord(String processId) {
+		return getProcessRecord(processId, false);
+	}
+	
+	public ProcessRecord getProcessRecord(String processId, boolean peek) {
 		ProcessRecord record = processRecords.get(processId);
 		synchronized (record) {
-			record.setStale(false);
+			if (!peek) {
+				record.setStale(false);
+			}
 			return record.clone();
 		}
 	}
@@ -453,7 +459,7 @@ public class ProcessManager {
 	public ProcessRecord getNextUpdate(boolean wait) {
 		while (true) {
 			String id = null;
-			try { 
+			try {
 				id = wait ? modifiedProcesses.take() : modifiedProcesses.poll();
 			} catch (InterruptedException e) {
 				return null;
