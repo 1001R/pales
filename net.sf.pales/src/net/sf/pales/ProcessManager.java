@@ -332,8 +332,8 @@ public class ProcessManager {
 			}
 		}
 		
-		for (ProcessRecord record_ : processRecords.values()) {
-			final ProcessRecord record = record_;
+		for (ProcessRecord r : processRecords.values()) {
+			final ProcessRecord record = r;
 			if (record.getStatus() == ProcessStatus.DELETING) {
 				processRecords.remove(record.getId());
 				removeProcessFromDatabase(record.getId());
@@ -341,6 +341,7 @@ public class ProcessManager {
 			else if (record.getStatus() == ProcessStatus.REQUESTED) {
 				long delay = GRACE_PERIOD - currentTime + record.getLastMod();
 				if (delay < 0) {
+					record.setLaunchedDuringRecovery(true);
 					doLaunch((PalesLaunchRequest) record.getData());
 				} else {
 					final TimerTask task = new TimerTask() {
@@ -348,6 +349,7 @@ public class ProcessManager {
 						public void run() {
 							synchronized (record) {
 								if (record.getStatus() == ProcessStatus.REQUESTED) {
+									record.setLaunchedDuringRecovery(true);
 									doLaunch((PalesLaunchRequest) record.getData());
 								}
 							}
