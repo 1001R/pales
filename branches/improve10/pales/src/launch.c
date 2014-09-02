@@ -40,6 +40,7 @@ int wmain(int argc, wchar_t **argv)
 	}
 
 	if (process_launch(request, argc - optind, argv + optind, &process) != 0) {
+		db_update(error, L"Launching process failed with error %d", GetLastError());
 		goto cleanup;
 	}
 	if (db_update(process->status, process->pid) != 0) {
@@ -55,6 +56,7 @@ int wmain(int argc, wchar_t **argv)
 		if (i == 1) {
 			// cancel process
 			if (process_cancel(process) != 0) {
+				db_update(error, L"Process termination failed with error %d", GetLastError());
 				goto cleanup;
 			}
 			db_update(cancelled);
@@ -65,6 +67,7 @@ int wmain(int argc, wchar_t **argv)
 				process->exitcode = 0;
 			}
 			if (process_wait(process) != 0) {
+				db_update(error, L"Waiting for process(es) to terminate failed with error %d", GetLastError());
 				goto cleanup;
 			}
 			db_update(finished, process->exitcode);
@@ -75,6 +78,7 @@ int wmain(int argc, wchar_t **argv)
 		db_update(error, L"System call WaitForMultipleObjects failed with error %d", GetLastError());
 	}
 cleanup:
+	db_close();
 	if (process != NULL) {
 		process_free(process);
 	}
