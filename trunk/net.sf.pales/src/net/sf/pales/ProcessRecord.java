@@ -10,6 +10,7 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 	private Object data;
 	private long lastMod;
 	private boolean stale = false;
+	private boolean launchedDuringRecovery = false;
 	
 	ProcessRecord(String id) {
 		this.id = id;
@@ -65,6 +66,14 @@ public class ProcessRecord implements Comparable<ProcessRecord>, Cloneable {
 	
 	public boolean isStale() {
 		return stale;
+	}
+	
+	public void setLaunchedDuringRecovery(boolean launchedDuringRecovery) {
+		this.launchedDuringRecovery = launchedDuringRecovery;
+	}
+	
+	public boolean isLaunchedDuringRecovery() {
+		return launchedDuringRecovery;
 	}
 	
 	public ProcessRecord clone() {
