@@ -196,6 +196,9 @@ public class ProcessManager {
 	
 	public ProcessRecord getProcessRecord(String processId, boolean peek) {
 		ProcessRecord record = processRecords.get(processId);
+		if (record == null) {
+			return null;
+		}
 		synchronized (record) {
 			if (!peek) {
 				record.setStale(false);
