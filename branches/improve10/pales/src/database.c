@@ -92,8 +92,7 @@ static int write_int_to_file(const wchar_t *filepath, DWORD pid)
 	char buf[16];
 	DWORD len, writeCount;
 
-	len = _snprintf(buf, sizeof(buf), "%ld", pid);
-	if (len < 0 || (len == sizeof(buf) && buf[len - 1] != '\0')) {
+	if ((len = _snprintf(buf, sizeof(buf), "%ld", pid)) < 0) {
 		return -1;
 	}
 	fileHandle = CreateFile(filepath, FILE_GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
