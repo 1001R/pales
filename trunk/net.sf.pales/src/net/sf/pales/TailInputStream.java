@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
@@ -23,7 +24,10 @@ public class TailInputStream extends InputStream {
 	private final Path path;
 	private long filePosition = 0;
 	private boolean fileDeleted = false;
+	private volatile boolean fileClosed = false;
 	private boolean poll = false;
+	private volatile Thread reader = null;
+	private final Object readerLock = new Object();
 	
 	private final ByteBuffer readBuffer;
 	
@@ -46,34 +50,41 @@ public class TailInputStream extends InputStream {
 	
 	@Override
 	public int read(byte[] b, int off, int len) throws IOException {
-		if (len == 0) {
-			return 0;
+		synchronized (readerLock) {
+			try {
+				reader = Thread.currentThread();
+				if (len == 0) {
+					return 0;
+				}
+				if (fileClosed || (readBuffer.remaining() == 0 && fileDeleted)) {
+					return -1;
+				}
+				int n = Math.min(len, readBuffer.remaining());
+				if (n > 0) {
+					readBuffer.get(b, 0, n);
+				}
+				if (n == len) {
+					return n;
+				}
+				try {
+					readFromFile();
+				} catch (InterruptedException ie) {
+					
+				}
+				if (readBuffer.remaining() == 0 && fileDeleted && n == 0) {
+					return -1;
+				}
+				off = n;
+				len -= n;
+				n = Math.min(len, readBuffer.remaining());
+				if (n > 0) {
+					readBuffer.get(b, 0, n);			
+				}
+				return off + n;
+			} finally {
+				reader = null;
+			}
 		}
-		if (readBuffer.remaining() == 0 && fileDeleted) {
-			return -1;
-		}
-		int n = Math.min(len, readBuffer.remaining());
-		if (n > 0) {
-			readBuffer.get(b, 0, n);
-		}
-		if (n == len) {
-			return n;
-		}
-		try {
-			readFromFile();
-		} catch (InterruptedException ie) {
-			
-		}
-		if (readBuffer.remaining() == 0 && fileDeleted && n == 0) {
-			return -1;
-		}
-		off = n;
-		len -= n;
-		n = Math.min(len, readBuffer.remaining());
-		if (n > 0) {
-			readBuffer.get(b, 0, n);			
-		}
-		return off + n;
 	}
 	
 	private void readFromFile() throws IOException, InterruptedException {
@@ -172,13 +183,43 @@ public class TailInputStream extends InputStream {
 		return attrs.size();
 	}
 	
-	public static void main(String[] args) throws IOException {
-		TailInputStream cis = new TailInputStream(FileSystems.getDefault().getPath("C:/Temp/log.txt"), true);
-		byte[] buf = new byte[4096];
-		int byteCount;
-		while ((byteCount = cis.read(buf)) > 0) {
-			System.out.write(buf, 0, byteCount);
-			System.out.flush();
+	@Override
+	public void close() throws IOException {
+		if (fileClosed) {
+			return;
 		}
+		fileClosed = true;
+		Thread currentReader = reader;
+		if (currentReader != null) {
+			currentReader.interrupt();
+		}
+		synchronized (readerLock) {
+			return;
+		}
+	}
+	
+	public static void main(String[] args) throws Exception {
+		final TailInputStream cis = new TailInputStream(Paths.get("C:/Temp/log.txt"), true);
+		Thread reader = new Thread("Reader") {
+			@Override
+			public void run() {
+				int byteCount = 0;
+				try {
+					byte[] buf = new byte[4096];
+					while ((byteCount = cis.read(buf)) > 0) {
+						System.out.write(buf, 0, byteCount);
+						System.out.flush();
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				System.out.println("Done Reader: " + byteCount);
+			}
+		};
+		reader.start();
+		Thread.sleep(5000);
+		cis.close();
+		reader.join();
+		System.out.println("Done Main");
 	}
 }
