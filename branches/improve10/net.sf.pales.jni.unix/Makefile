@@ -3,25 +3,32 @@ CXXFLAGS := -Wall -Wno-parentheses -Wno-sign-compare -std=c++11 -fPIC
 CPPFLAGS := -D_GNU_SOURCE -I$(JNI_INCDIR) -I$(JNI_INCDIR)/linux
 LDFLAGS := -lpthread
 ifdef DEBUG
-CFLAGS += -g -O0
+CXXFLAGS += -g -O0
 OUTDIR := debug
 else
-CFLAGS += -O2
+CXXFLAGS += -O2
 OUTDIR := release
 endif
-VPATH = $(OUTDIR)
+LIBPALES_OBJS := $(addprefix $(OUTDIR)/, unix.o palesjni.o database.o syserror.o bsd-closefrom.o)
+TEST_OBJS := $(addprefix $(OUTDIR)/, palestest.o unix.o database.o syserror.o)
 
-%.o: %.cc %.h
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $(OUTDIR)/$@ -c $< 
+$(OUTDIR)/%.o: %.cc %.h
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ -c $< 
+
+$(OUTDIR)/bsd-closefrom.o: bsd-closefrom.c
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ -c $< 
+
+$(OUTDIR)/palestest.o: palestest.cc
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ -c $< 
 
 all: libpales.so palestest
 
 clean:
 	rm -f $(OUTDIR)/*.so $(OUTDIR)/*.o $(OUTDIR)/palestest
 
-libpales.so: unix.o palesjni.o database.o
+libpales.so: $(LIBPALES_OBJS)
 	$(CXX) -shared -o $(OUTDIR)/$@ $^
 
-palestest: palestest.o unix.o database.o syserror.o
+palestest: $(TEST_OBJS)
 	$(CXX) -o $(OUTDIR)/$@ $^ $(LDFLAGS)
 

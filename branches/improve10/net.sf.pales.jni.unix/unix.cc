@@ -22,16 +22,18 @@
 #include <sstream>
 #include <memory>
 #include <iostream>
+#include <atomic>
 
 using namespace std;
 
-static unique_ptr<Semaphore> SEM_CANCEL;
-static volatile bool PROC_EXITED = false;
+extern void closefrom(int lowfd);
+static atomic_bool PROC_EXITED(false);
+static atomic<sem_t*> TERM_SEM;
 
 static void sigaction_void(int signal, siginfo_t *info, void *context) {
     PROC_EXITED = true;
-    if (SEM_CANCEL) {
-	SEM_CANCEL->post();
+    if (TERM_SEM) {
+	sem_post(TERM_SEM.load());
     }
 }
 
@@ -74,6 +76,7 @@ static void process_exec(const char *rundir, const char *outfile, const char *er
         syslog(LOG_ERR, "Can't redirect stderr to %s: %m", errfile);
         _exit(EXIT_FAILURE);
     }
+    closefrom(3);
     execv(executable, argv);
     syslog(LOG_ERR, "System call `execv' failed unexpectedly: %m");
     _exit(EXIT_FAILURE);
@@ -117,9 +120,10 @@ static void process_monitor(const char *procid, const char *dbdir, const char *r
 	    try {
 		ostringstream terminationSemaphoreName;
 		terminationSemaphoreName << "/PALES:" << procid;
-		SEM_CANCEL.reset(new Semaphore(terminationSemaphoreName.str(), O_EXCL, 0600, 0, true));
+		unique_ptr<Semaphore> terminationSemaphorePointer(new Semaphore(terminationSemaphoreName.str(), O_EXCL, 0600, 0, true));
+		TERM_SEM = *terminationSemaphorePointer.get();
 		db.update(Database::RUNNING, pid);
-		SEM_CANCEL->wait();
+		terminationSemaphorePointer->wait();
 		if (!PROC_EXITED) {
 		    syslog(LOG_NOTICE, "Process cancellation requested");
 		    sigdelset(&sigset, SIGTERM);
